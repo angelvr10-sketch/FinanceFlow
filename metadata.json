@@ -1,0 +1,7 @@
+{
+  "name": "FinanceFlow - Control de Gastos AI",
+  "description": "Una aplicación inteligente para gestionar tus finanzas personales con análisis predictivo impulsado por Gemini.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
