@@ -19,47 +19,49 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({ transactions }) => {
   };
 
   useEffect(() => {
-    if (transactions.length > 0 && transactions.length % 3 === 0) {
+    if (transactions.length > 0 && transactions.length % 5 === 0) {
       fetchAdvice();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions.length]);
 
   return (
-    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-4 opacity-10">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.364-6.364l-.707-.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M12 21V12" />
+    <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-[3rem] p-10 relative overflow-hidden transition-colors shadow-inner">
+      <div className="absolute top-0 right-0 p-8 opacity-[0.05] dark:opacity-[0.15]">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
       </div>
 
-      <div className="flex items-center gap-2 mb-3">
-        <div className="bg-indigo-600 text-white p-1 rounded-md">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      <div className="flex items-center gap-4 mb-8">
+        <div className="bg-indigo-600 dark:bg-indigo-500 text-white p-3 rounded-2xl shadow-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h4 className="text-sm font-bold text-indigo-900">Asistente de Finanzas AI</h4>
+        <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-[0.3em]">Consejero Gemini</h4>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-3">
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
-          <p className="text-xs text-indigo-600 italic">Analizando tus movimientos recientes...</p>
+        <div className="flex items-center gap-4">
+          <div className="animate-spin rounded-full h-5 w-5 border-3 border-indigo-500 border-t-transparent"></div>
+          <p className="text-sm font-black text-indigo-600 dark:text-indigo-400 italic">Analizando patrones financieros...</p>
         </div>
       ) : (
-        <div className="text-xs leading-relaxed text-indigo-800 space-y-2">
+        <div className="text-sm leading-relaxed text-indigo-800 dark:text-indigo-200/90 space-y-5">
           {advice ? (
-            <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: advice.replace(/\n/g, '<br/>') }}></div>
+            <div className="prose prose-sm font-bold dark:prose-invert text-sm" dangerouslySetInnerHTML={{ __html: advice.replace(/\n/g, '<br/>') }}></div>
           ) : (
-            <p>Agrega más transacciones para recibir consejos personalizados de ahorro.</p>
+            <p className="font-black opacity-60">Tu asesor está listo. Registra más movimientos para recibir consejos personalizados.</p>
           )}
-          <button 
-            onClick={fetchAdvice}
-            className="mt-2 text-indigo-600 font-bold hover:underline"
-          >
-            Actualizar consejos
-          </button>
+          <div className="pt-4">
+            <button 
+              onClick={fetchAdvice}
+              className="px-6 py-3 bg-white dark:bg-indigo-600/30 text-xs font-black text-indigo-600 dark:text-indigo-300 uppercase tracking-widest rounded-2xl border border-indigo-100 dark:border-indigo-500/20 hover:scale-105 transition-all shadow-sm"
+            >
+              Recalcular Análisis
+            </button>
+          </div>
         </div>
       )}
     </div>
