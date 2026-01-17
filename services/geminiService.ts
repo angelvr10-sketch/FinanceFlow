@@ -2,7 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
-// Acceso seguro a la API KEY
 const getApiKey = () => {
   try {
     return process.env.API_KEY || '';
@@ -14,23 +13,40 @@ const getApiKey = () => {
 const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
-  if (transactions.length === 0) return "Aún no tienes transacciones para analizar. ¡Comienza agregando tus gastos e ingresos!";
+  if (transactions.length === 0) return "Aún no tienes transacciones para analizar.";
 
-  const prompt = `Analiza estas transacciones financieras y dame consejos breves (máximo 3 puntos) sobre cómo mejorar mis finanzas. Sé directo y motivador.
-  Transacciones: ${JSON.stringify(transactions)}`;
+  // Simplificamos los datos para no exceder tokens y evitar confusiones del modelo
+  const dataSummary = transactions.slice(0, 20).map(t => ({
+    t: t.type,
+    c: t.category,
+    a: t.amount,
+    d: t.description
+  }));
+
+  const prompt = `Actúa como un asesor financiero personal. Analiza este resumen de transacciones recientes y dame 3 consejos clave para mejorar mi salud financiera.
+  Resumen: ${JSON.stringify(dataSummary)}
+  
+  REQUISITOS:
+  1. Usa lenguaje claro y directo.
+  2. Devuelve la respuesta en formato de lista con puntos (•).
+  3. No uses markdown complejo, solo texto y saltos de línea.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: "Eres un asesor financiero experto, amigable y directo. Hablas español de España/Latinoamérica.",
+        systemInstruction: "Eres un asesor financiero experto. Hablas español. Tus respuestas son breves y útiles.",
+        temperature: 0.7,
       }
     });
-    return response.text || "No pude generar consejos en este momento.";
+    
+    const text = response.text;
+    if (!text) throw new Error("Empty response");
+    return text;
   } catch (error) {
     console.error("Error calling Gemini:", error);
-    return "Lo siento, hubo un problema al conectar con tu asesor financiero AI.";
+    return "Lo siento, el servicio de IA está experimentando alta demanda. Por favor, intenta de nuevo en unos minutos.";
   }
 };
 
@@ -40,18 +56,8 @@ export const categorizeTransaction = async (description: string, type: Transacti
   
   const typeStr = type === TransactionType.INCOME ? "INGRESO" : "GASTO";
 
-  const prompt = `Analiza la descripción de esta transacción de tipo ${typeStr}: "${description}". 
-  
-  REGLAS DE CATEGORIZACIÓN:
-  1. Si menciona "gasolina", "combustible", "uber" o "taxi" -> Categoría: "Transporte", Icono: "transport".
-  2. Si menciona "casa", "luz", "agua", "hogar", "alquiler" -> Categoría: "Hogar", Icono: "home".
-  3. Si menciona "costillas", "restaurante", "pizza", "comida", "supermercado" -> Categoría: "Comida", Icono: "food".
-  4. Si menciona "venta", "producto", "mercancía", "tinta" -> Categoría: "Ventas", Icono: "business".
-  5. Si menciona "soporte", "técnico", "asesoría", "servicio profesional", "honorarios" -> Categoría: "Honorarios", Icono: "professional".
-  6. Si es un ingreso de nómina o trabajo estable -> Categoría: "Sueldo", Icono: "salary".
-  
-  Devuelve el resultado en JSON usando las categorías permitidas: ${categories.join(", ")} 
-  y los iconos permitidos: ${icons.join(", ")}.`;
+  const prompt = `Analiza la descripción: "${description}" (${typeStr}). 
+  Devuelve JSON con category (de: ${categories.join(",")}), icon (de: ${icons.join(",")}), confidence (0-1) y subCategory.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -62,22 +68,10 @@ export const categorizeTransaction = async (description: string, type: Transacti
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            category: {
-              type: Type.STRING,
-              description: "La categoría principal.",
-            },
-            subCategory: {
-              type: Type.STRING,
-              description: "Sub-categoría específica sugerida.",
-            },
-            icon: {
-              type: Type.STRING,
-              description: "El ID del icono elegido de la lista permitida.",
-            },
-            confidence: {
-              type: Type.NUMBER,
-              description: "Nivel de confianza de 0 a 1.",
-            },
+            category: { type: Type.STRING },
+            subCategory: { type: Type.STRING },
+            icon: { type: Type.STRING },
+            confidence: { type: Type.NUMBER },
           },
           required: ["category", "icon", "confidence"],
         },
@@ -92,7 +86,6 @@ export const categorizeTransaction = async (description: string, type: Transacti
       confidence: result.confidence || 0.5,
     };
   } catch (error) {
-    console.error("Error categorizing:", error);
     return { category: "Otros", icon: "other", confidence: 0 };
   }
 };

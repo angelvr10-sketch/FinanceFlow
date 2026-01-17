@@ -28,11 +28,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
         {sorted.map((t) => (
           <div key={t.id} className="group bg-white dark:bg-slate-900 p-7 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:scale-[1.03] transition-all duration-300">
             <div className="flex items-center gap-6">
-              <div className={`p-5 rounded-3xl shadow-lg ${t.type === TransactionType.INCOME ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600'}`}>
+              <div className={`p-4 rounded-3xl shadow-lg flex items-center justify-center ${t.type === TransactionType.INCOME ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600'}`}>
                 {t.icon && CategoryIcons[t.icon] ? (
-                  <div className="scale-125">{CategoryIcons[t.icon]}</div>
+                  CategoryIcons[t.icon]
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                   </svg>
                 )}

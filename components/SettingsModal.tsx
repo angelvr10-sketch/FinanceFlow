@@ -1,9 +1,9 @@
 
 import React, { useRef, useState } from 'react';
-import { DataInspector } from './DataInspector';
 import { AccountManager } from './AccountManager';
+import { TemplateManager } from './TemplateManager';
 import { supabase } from '../services/supabase';
-import { Account } from '../types';
+import { Account, TransactionTemplate } from '../types';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -13,9 +13,12 @@ interface SettingsModalProps {
   accountCount: number;
   allData: any;
   accounts: Account[];
+  templates: TransactionTemplate[];
   onAddAccount: (acc: Account) => void;
   onUpdateAccount: (acc: Account) => void;
   onDeleteAccount: (id: string) => void;
+  onAddTemplate: (t: TransactionTemplate) => void;
+  onDeleteTemplate: (id: string) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
@@ -24,32 +27,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onImport, 
   transactionCount,
   accountCount,
-  allData,
   accounts,
+  templates,
   onAddAccount,
   onUpdateAccount,
-  onDeleteAccount
+  onDeleteAccount,
+  onAddTemplate,
+  onDeleteTemplate
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showInspector, setShowInspector] = useState(false);
   const [showAccountManager, setShowAccountManager] = useState(false);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
   const isCloudConnected = !!supabase;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (confirm('¿Restaurar datos desde este archivo? Se borrarán los datos actuales en este dispositivo.')) {
+      if (confirm('¿Restaurar datos desde este archivo?')) {
         onImport(file);
       }
-      e.target.value = ''; // Reset
-    }
-  };
-
-  const triggerFileSelect = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    } else {
-      alert("Error: No se pudo acceder al selector de archivos.");
+      e.target.value = ''; 
     }
   };
 
@@ -76,15 +73,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <div className="space-y-8">
             <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
-              <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase mb-4 tracking-widest">Resumen de Datos</p>
+              <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase mb-4 tracking-widest">Resumen</p>
               <div className="grid grid-cols-2 gap-6">
                 <div className="text-center">
                   <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{accountCount}</p>
-                  <p className="text-xs text-slate-500 font-black uppercase tracking-tighter">Cuentas</p>
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-tighter">Cuentas</p>
                 </div>
                 <div className="text-center border-l border-slate-200 dark:border-slate-700">
                   <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{transactionCount}</p>
-                  <p className="text-xs text-slate-500 font-black uppercase tracking-tighter">Movimientos</p>
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-tighter">Movimientos</p>
                 </div>
               </div>
             </div>
@@ -93,53 +90,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAccountManager(true)}
-                className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 font-black text-sm uppercase tracking-widest rounded-2xl active:scale-95 transition-all border border-indigo-100 dark:border-indigo-500/20"
+                className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                 Gestionar Cuentas
               </button>
 
               <button
                 type="button"
-                onClick={() => setShowInspector(true)}
-                className="flex items-center justify-center gap-4 w-full py-5 bg-slate-900 dark:bg-slate-700 text-white font-black text-sm uppercase tracking-widest rounded-2xl shadow-xl active:scale-95 transition-all"
+                onClick={() => setShowTemplateManager(true)}
+                className="flex items-center justify-center gap-4 w-full py-5 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all border border-emerald-100 dark:border-emerald-500/20"
               >
-                Ver Datos Brutos
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+                Gestionar Plantillas
               </button>
 
               <button
                 type="button"
                 onClick={onExport}
-                className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-600 text-white font-black text-sm uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
+                className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl active:scale-95 transition-all"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                 Exportar Backup
               </button>
 
               <button
                 type="button"
-                onClick={triggerFileSelect}
-                className="flex items-center justify-center gap-4 w-full py-5 bg-white dark:bg-transparent border-2 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-black text-sm uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center justify-center gap-4 w-full py-5 bg-white dark:bg-transparent border-2 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                 Restaurar JSON
               </button>
-              {/* Simplificamos accept para Android */}
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept=".json" 
-                className="hidden" 
-              />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
             </div>
           </div>
         </div>
       </div>
-
-      {showInspector && (
-        <DataInspector 
-          data={allData} 
-          onClose={() => setShowInspector(false)} 
-        />
-      )}
 
       {showAccountManager && (
         <AccountManager 
@@ -148,6 +135,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           onUpdate={onUpdateAccount}
           onDelete={onDeleteAccount}
           onClose={() => setShowAccountManager(false)}
+        />
+      )}
+
+      {showTemplateManager && (
+        <TemplateManager
+          templates={templates}
+          accounts={accounts}
+          onAdd={onAddTemplate}
+          onDelete={onDeleteTemplate}
+          onClose={() => setShowTemplateManager(false)}
         />
       )}
     </>

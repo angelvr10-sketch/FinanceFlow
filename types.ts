@@ -29,16 +29,27 @@ export interface CategorizationResult {
 
 export interface Transaction {
   id: string;
-  accountId: string; // Relación con la cuenta
+  accountId: string;
   amount: number;
   description: string;
   category: string;
-  subCategory?: string; // Sub-categoría sugerida por IA
+  subCategory?: string;
   type: TransactionType;
   date: string;
   icon?: string;
   isRecurring?: boolean;
   recurrenceId?: string;
+}
+
+export interface TransactionTemplate {
+  id: string;
+  name: string;
+  accountId: string;
+  amount: number;
+  description: string;
+  category: string;
+  type: TransactionType;
+  icon?: string;
 }
 
 export interface FinancialSummary {

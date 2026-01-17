@@ -18,9 +18,7 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const years = useMemo(() => {
-    // Explicitly typed Set to fix inference of numbers and sort callback parameters
     const uniqueYears = Array.from(new Set<number>(transactions.map(t => new Date(t.date).getFullYear())));
-    // Added explicit types to sort callback parameters to resolve arithmetic errors on line 22
     return uniqueYears.length > 0 ? uniqueYears.sort((a: number, b: number) => b - a) : [new Date().getFullYear()];
   }, [transactions]);
 
@@ -56,6 +54,40 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
     };
   }, [filteredData]);
 
+  const exportToCSV = () => {
+    if (filteredData.length === 0) {
+      alert("No hay datos para exportar en este periodo.");
+      return;
+    }
+
+    const headers = ["Fecha", "Descripcion", "Categoria", "Subcategoria", "Tipo", "Monto"];
+    const rows = filteredData.map(t => [
+      new Date(t.date).toLocaleDateString(),
+      t.description.replace(/,/g, ''),
+      t.category,
+      t.subCategory || '',
+      t.type,
+      t.amount
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const periodName = periodType === 'MES' ? `${MONTHS[selectedMonth]}_${selectedYear}` : `${selectedYear}`;
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `reporte_financeflow_${periodName}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-10 animate-in slide-in-from-right duration-500">
       {/* Filtros de Periodo */}
@@ -75,12 +107,12 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
           </button>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
           {periodType === 'MES' && (
             <select 
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              className="flex-1 p-5 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-black text-slate-700 dark:text-slate-200 outline-none"
+              className="flex-grow p-5 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-black text-slate-700 dark:text-slate-200 outline-none appearance-none"
             >
               {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
             </select>
@@ -88,10 +120,20 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
           <select 
             value={selectedYear}
             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="flex-1 p-5 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-black text-slate-700 dark:text-slate-200 outline-none"
+            className="flex-grow p-5 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-black text-slate-700 dark:text-slate-200 outline-none appearance-none"
           >
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
+
+          <button 
+            onClick={exportToCSV}
+            title="Exportar a CSV"
+            className="p-5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg active:scale-95 flex items-center justify-center shrink-0"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -107,59 +149,73 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
         </div>
       </div>
 
-      {/* Listado Detallado */}
-      <div className="space-y-6">
-        <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] px-4">Desglose por Categoría</h3>
+      {/* Listado de Categorías (Tipo Lista) */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-6 mb-4">
+          <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em]">Desglose</h3>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {filteredData.length} Operaciones
+          </span>
+        </div>
         
-        {stats.categories.length > 0 ? stats.categories.map(([catName, data]) => {
-          const percentage = data.type === TransactionType.EXPENSE 
-            ? (data.total / (stats.totalExpenses || 1)) * 100 
-            : (data.total / (stats.totalIncomes || 1)) * 100;
+        <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+          {stats.categories.length > 0 ? (
+            <div className="divide-y divide-slate-50 dark:divide-slate-800/50">
+              {stats.categories.map(([catName, data]) => {
+                const percentage = data.type === TransactionType.EXPENSE 
+                  ? (data.total / (stats.totalExpenses || 1)) * 100 
+                  : (data.total / (stats.totalIncomes || 1)) * 100;
 
-          return (
-            <div key={catName} className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-              <div className="flex justify-between items-end mb-6">
-                <div>
-                  <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{catName}</h4>
-                  <p className={`text-xs font-bold uppercase ${data.type === TransactionType.EXPENSE ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    {data.type === TransactionType.EXPENSE ? 'Gasto' : 'Ingreso'}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-black text-slate-900 dark:text-white">${data.total.toLocaleString()}</p>
-                  <p className="text-xs font-black text-slate-400 uppercase">{percentage.toFixed(1)}% del total</p>
-                </div>
-              </div>
+                return (
+                  <div key={catName} className="p-6 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-3 h-3 rounded-full ${data.type === TransactionType.EXPENSE ? 'bg-rose-500' : 'bg-emerald-500'}`}></div>
+                        <div>
+                          <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-lg">{catName}</h4>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {percentage.toFixed(1)}% del total
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-xl font-black ${data.type === TransactionType.EXPENSE ? 'text-rose-500' : 'text-emerald-500'}`}>
+                          {data.type === TransactionType.EXPENSE ? '-' : '+'}${data.total.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
 
-              {/* Barra de progreso */}
-              <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full mb-8 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-1000 ${data.type === TransactionType.EXPENSE ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                  style={{ width: `${percentage}%` }}
-                ></div>
-              </div>
+                    {/* Barra de progreso minimalista */}
+                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mb-4">
+                      <div 
+                        className={`h-full rounded-full ${data.type === TransactionType.EXPENSE ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
 
-              {/* Subcategorías */}
-              <div className="space-y-4 pt-4 border-t border-slate-50 dark:border-slate-800/50">
-                {/* Fixed subtraction error on line 142 by adding explicit type cast and parameter types for sort operation */}
-                {(Object.entries(data.sub) as [string, number][]).sort((a: [string, number], b: [string, number]) => b[1] - a[1]).map(([subName, subTotal]) => (
-                  <div key={subName} className="flex justify-between items-center group">
-                    <span className="text-sm font-bold text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors italic">
-                      # {subName}
-                    </span>
-                    <span className="text-sm font-black text-slate-700 dark:text-slate-300">
-                      ${subTotal.toLocaleString()}
-                    </span>
+                    {/* Subcategorías compactas */}
+                    <div className="space-y-2 ml-7">
+                      {(Object.entries(data.sub) as [string, number][]).sort((a, b) => b[1] - a[1]).map(([subName, subTotal]) => (
+                        <div key={subName} className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-slate-400 dark:text-slate-500 italic">
+                            #{subName}
+                          </span>
+                          <span className="text-xs font-black text-slate-600 dark:text-slate-400">
+                            ${subTotal.toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          );
-        }) : (
-          <div className="text-center py-20 opacity-30 italic font-black text-slate-400">
-            No hay datos para este periodo
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-24 opacity-30 italic font-black text-slate-400">
+              No hay datos para este periodo
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
