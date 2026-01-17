@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
 import { TransactionForm } from './components/TransactionForm';
 import { AIConsultant } from './components/AIConsultant';
 import { SettingsModal } from './components/SettingsModal';
-import { Transaction, RecurrenceFrequency, Account, TransactionType } from './types';
+import { Transaction, Account, TransactionType } from './types';
+import { supabase } from './services/supabase';
 
 const INITIAL_ACCOUNTS: Account[] = [
   { id: 'acc_1', name: '💰 Ahorros', type: 'AHORRO', color: '#6366f1' },
@@ -23,6 +24,59 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Mapeo de camelCase a snake_case para Supabase
+  const mapToDB = (t: any) => ({
+    id: t.id,
+    account_id: t.accountId,
+    amount: t.amount,
+    description: t.description,
+    category: t.category,
+    sub_category: t.subCategory,
+    type: t.type,
+    date: t.date,
+    icon: t.icon
+  });
+
+  const mapFromDB = (t: any): Transaction => ({
+    id: t.id,
+    accountId: t.account_id,
+    amount: parseFloat(t.amount),
+    description: t.description,
+    category: t.category,
+    subCategory: t.sub_category,
+    type: t.type as TransactionType,
+    date: t.date,
+    icon: t.icon
+  });
+
+  const fetchCloudData = useCallback(async () => {
+    if (!supabase) return;
+    setIsSyncing(true);
+    try {
+      // 1. Cargar Cuentas
+      const { data: accData, error: accErr } = await supabase.from('accounts').select('*');
+      if (accErr) throw accErr;
+      if (accData && accData.length > 0) {
+        setAccounts(accData.map(a => ({ ...a, id: a.id })));
+      } else {
+        // Si no hay cuentas en la nube, subir las iniciales
+        await supabase.from('accounts').upsert(INITIAL_ACCOUNTS);
+      }
+
+      // 2. Cargar Transacciones
+      const { data: txData, error: txErr } = await supabase.from('transactions').select('*');
+      if (txErr) throw txErr;
+      if (txData) {
+        setTransactions(txData.map(mapFromDB));
+      }
+    } catch (err) {
+      console.error("Error sincronizando con la nube:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -34,58 +88,61 @@ const App: React.FC = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
+    // Cargar primero de localStorage por velocidad
     const savedTx = localStorage.getItem('ff_transactions');
     const savedAcc = localStorage.getItem('ff_accounts');
     if (savedTx) setTransactions(JSON.parse(savedTx));
     if (savedAcc) setAccounts(JSON.parse(savedAcc));
-  }, []);
 
+    // Luego intentar sincronizar con Supabase
+    fetchCloudData();
+  }, [fetchCloudData]);
+
+  // Guardar en LocalStorage cada vez que cambie algo (como redundancia)
   useEffect(() => {
     localStorage.setItem('ff_transactions', JSON.stringify(transactions));
     localStorage.setItem('ff_accounts', JSON.stringify(accounts));
   }, [transactions, accounts]);
 
-  const handleExport = () => {
-    const data = JSON.stringify({ transactions, accounts });
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `financeflow_backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-  };
+  const handleAddOrEditTransaction = async (data: Omit<Transaction, 'id'>) => {
+    const id = editingTransaction ? editingTransaction.id : Math.random().toString(36).substr(2, 9);
+    const newTx: Transaction = { ...data, id };
 
-  const handleImport = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = JSON.parse(e.target?.result as string);
-        if (content.transactions && content.accounts) {
-          setTransactions(content.transactions);
-          setAccounts(content.accounts);
-          alert('Datos importados correctamente');
-        }
-      } catch (err) {
-        alert('Error al importar el archivo');
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleAddOrEditTransaction = (data: Omit<Transaction, 'id'>) => {
+    // Actualizar estado local inmediatamente
     if (editingTransaction) {
-      setTransactions(prev => prev.map(t => t.id === editingTransaction.id ? { ...data, id: editingTransaction.id } : t));
+      setTransactions(prev => prev.map(t => t.id === id ? newTx : t));
       setEditingTransaction(null);
     } else {
-      const newTx = { ...data, id: Math.random().toString(36).substr(2, 9) };
       setTransactions(prev => [newTx, ...prev]);
+    }
+
+    // Sincronizar con Supabase
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('transactions').upsert(mapToDB(newTx));
+        if (error) throw error;
+      } catch (err) {
+        console.error("Error al guardar en la nube:", err);
+        alert("Error al sincronizar con la base de datos. Se guardó localmente.");
+      }
     }
     setIsFormOpen(false);
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    if (confirm('¿Eliminar transacción?')) {
-      setTransactions(prev => prev.filter(t => t.id !== id));
+  const handleDeleteTransaction = async (id: string) => {
+    if (!confirm('¿Eliminar transacción?')) return;
+
+    // Actualizar local
+    setTransactions(prev => prev.filter(t => t.id !== id));
+
+    // Eliminar en la nube
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (error) throw error;
+      } catch (err) {
+        console.error("Error al eliminar en la nube:", err);
+      }
     }
   };
 
@@ -100,7 +157,15 @@ const App: React.FC = () => {
 
   return (
     <Layout>
-      <div className="flex justify-end p-2 mb-4">
+      <div className="flex justify-between items-center p-2 mb-4">
+        <div className="flex items-center gap-2">
+          {isSyncing && (
+             <div className="flex items-center gap-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 rounded-full">
+                <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>
+                <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400">Sincronizando...</span>
+             </div>
+          )}
+        </div>
         <button 
           onClick={() => setIsDarkMode(!isDarkMode)}
           className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-600 dark:text-slate-300 transition-all shadow-sm active:scale-95"
@@ -172,8 +237,8 @@ const App: React.FC = () => {
       {isSettingsOpen && (
         <SettingsModal 
           onClose={() => setIsSettingsOpen(false)}
-          onExport={handleExport}
-          onImport={handleImport}
+          onExport={() => {}} // Se puede añadir lógica de exportar aquí
+          onImport={() => {}} // Se puede añadir lógica de importar aquí
           transactionCount={transactions.length}
           accountCount={accounts.length}
           allData={{ transactions, accounts, config: { isDarkMode, selectedAccountId } }}
