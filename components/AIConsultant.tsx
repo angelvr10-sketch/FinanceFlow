@@ -26,40 +26,42 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({ transactions }) => {
   }, [transactions.length]);
 
   return (
-    <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-[3rem] p-10 relative overflow-hidden transition-colors shadow-inner">
-      <div className="absolute top-0 right-0 p-8 opacity-[0.05] dark:opacity-[0.15]">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+    <div className="bg-indigo-600 dark:bg-indigo-900/40 text-white rounded-[4rem] p-12 relative overflow-hidden transition-all shadow-2xl mx-2">
+      <div className="absolute top-0 right-0 p-10 opacity-20">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-32 w-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
       </div>
 
-      <div className="flex items-center gap-4 mb-8">
-        <div className="bg-indigo-600 dark:bg-indigo-500 text-white p-3 rounded-2xl shadow-lg">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex items-center gap-6 mb-10">
+        <div className="bg-white/20 p-4 rounded-3xl backdrop-blur-xl border border-white/30">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-[0.3em]">Consejero Gemini</h4>
+        <h4 className="text-xl font-black uppercase tracking-[0.3em]">Consejero Pro</h4>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-4">
-          <div className="animate-spin rounded-full h-5 w-5 border-3 border-indigo-500 border-t-transparent"></div>
-          <p className="text-sm font-black text-indigo-600 dark:text-indigo-400 italic">Analizando patrones financieros...</p>
+        <div className="flex items-center gap-6">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-white/20 border-t-white"></div>
+          <p className="text-lg font-black italic">Refinando tu estrategia financiera...</p>
         </div>
       ) : (
-        <div className="text-sm leading-relaxed text-indigo-800 dark:text-indigo-200/90 space-y-5">
+        <div className="space-y-8">
           {advice ? (
-            <div className="prose prose-sm font-bold dark:prose-invert text-sm" dangerouslySetInnerHTML={{ __html: advice.replace(/\n/g, '<br/>') }}></div>
+            <div className="prose prose-invert max-w-none">
+              <div className="text-lg font-bold leading-relaxed opacity-95" dangerouslySetInnerHTML={{ __html: advice.replace(/\n/g, '<br/>') }}></div>
+            </div>
           ) : (
-            <p className="font-black opacity-60">Tu asesor está listo. Registra más movimientos para recibir consejos personalizados.</p>
+            <p className="text-lg font-black opacity-70">Tu asesor de IA necesita al menos 5 movimientos para analizar patrones.</p>
           )}
-          <div className="pt-4">
+          <div className="pt-6">
             <button 
               onClick={fetchAdvice}
-              className="px-6 py-3 bg-white dark:bg-indigo-600/30 text-xs font-black text-indigo-600 dark:text-indigo-300 uppercase tracking-widest rounded-2xl border border-indigo-100 dark:border-indigo-500/20 hover:scale-105 transition-all shadow-sm"
+              className="w-full sm:w-auto px-10 py-5 bg-white text-indigo-700 text-sm font-black uppercase tracking-widest rounded-[2rem] shadow-xl hover:bg-slate-50 transition-all active:scale-95"
             >
-              Recalcular Análisis
+              Nuevo Análisis IA
             </button>
           </div>
         </div>

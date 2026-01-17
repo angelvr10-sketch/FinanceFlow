@@ -1,5 +1,7 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
+import { DataInspector } from './DataInspector';
+import { supabase } from '../services/supabase';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -7,6 +9,7 @@ interface SettingsModalProps {
   onImport: (file: File) => void;
   transactionCount: number;
   accountCount: number;
+  allData: any;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
@@ -14,80 +17,108 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onExport, 
   onImport, 
   transactionCount,
-  accountCount 
+  accountCount,
+  allData
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showInspector, setShowInspector] = useState(false);
+  const isCloudConnected = !!supabase;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (confirm('¿Estás seguro de que deseas importar estos datos? Se sobrescribirá la información actual.')) {
+      if (confirm('¿Importar datos? Esto borrará lo actual.')) {
         onImport(file);
       }
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl scale-in-center">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-black text-slate-800">Respaldo</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <p className="text-[10px] font-black text-slate-400 uppercase mb-3">Resumen de datos</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center">
-                <p className="text-lg font-bold text-indigo-600">{accountCount}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Cuentas</p>
-              </div>
-              <div className="text-center border-l border-slate-200">
-                <p className="text-lg font-bold text-indigo-600">{transactionCount}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Transacciones</p>
+    <>
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-in fade-in duration-300">
+        <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl border border-white/10">
+          <div className="flex justify-between items-center mb-10">
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Ajustes</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <div className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {isCloudConnected ? 'Nube Conectada (Postgres)' : 'Modo Local (Offline)'}
+                </span>
               </div>
             </div>
+            <button onClick={onClose} className="p-3 text-slate-400 hover:text-slate-600">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
-            <button
-              onClick={onExport}
-              className="flex items-center justify-center gap-3 w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Exportar Respaldo
-            </button>
+          <div className="space-y-8">
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
+              <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase mb-4 tracking-widest">Resumen de Datos</p>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="text-center">
+                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{accountCount}</p>
+                  <p className="text-xs text-slate-500 font-black uppercase tracking-tighter">Cuentas</p>
+                </div>
+                <div className="text-center border-l border-slate-200 dark:border-slate-700">
+                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{transactionCount}</p>
+                  <p className="text-xs text-slate-500 font-black uppercase tracking-tighter">Movimientos</p>
+                </div>
+              </div>
+            </div>
 
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center justify-center gap-3 w-full py-4 bg-white border-2 border-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all active:scale-95"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              Importar Datos
-            </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              accept=".json" 
-              className="hidden" 
-            />
+            <div className="space-y-4">
+              <button
+                onClick={() => setShowInspector(true)}
+                className="flex items-center justify-center gap-4 w-full py-5 bg-slate-900 dark:bg-slate-700 text-white font-black text-sm uppercase tracking-widest rounded-2xl shadow-xl active:scale-95 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z" />
+                </svg>
+                Inspeccionar Bruto
+              </button>
+
+              <button
+                onClick={onExport}
+                className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-600 text-white font-black text-sm uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Exportar Backup
+              </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center justify-center gap-4 w-full py-5 bg-white dark:bg-transparent border-2 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-black text-sm uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Restaurar JSON
+              </button>
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest leading-loose">
+                {isCloudConnected 
+                  ? 'Tus datos se sincronizan con PostgreSQL en Supabase.' 
+                  : 'Sube tu app a Vercel con las llaves de Supabase para activar la nube.'}
+              </p>
+            </div>
           </div>
-
-          <p className="text-[10px] text-center text-slate-400 font-medium px-4">
-            El archivo de respaldo contiene toda la información de tus cuentas y transacciones en formato JSON.
-          </p>
         </div>
       </div>
-    </div>
+
+      {showInspector && (
+        <DataInspector 
+          data={allData} 
+          onClose={() => setShowInspector(false)} 
+        />
+      )}
+    </>
   );
 };
