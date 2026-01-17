@@ -42,6 +42,17 @@ export const CategoryIcons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
     </svg>
   ),
+  business: (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  ),
+  professional: (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  ),
   shopping: (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -62,7 +73,9 @@ export const getDefaultIcon = (category: string): string => {
   if (cat.includes('hogar') || cat.includes('renta') || cat.includes('luz')) return 'home';
   if (cat.includes('salud') || cat.includes('farmacia') || cat.includes('doctor')) return 'health';
   if (cat.includes('educación') || cat.includes('curso') || cat.includes('libro')) return 'education';
-  if (cat.includes('sueldo') || cat.includes('ingreso') || cat.includes('nomina')) return 'salary';
+  if (cat.includes('sueldo') || cat.includes('nomina')) return 'salary';
+  if (cat.includes('venta') || cat.includes('negocio')) return 'business';
+  if (cat.includes('honorarios') || cat.includes('soporte') || cat.includes('servicio')) return 'professional';
   if (cat.includes('inversión') || cat.includes('ahorro')) return 'investment';
   if (cat.includes('otros')) return 'other';
   return 'shopping';

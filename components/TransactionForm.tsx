@@ -28,16 +28,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, init
     let finalIcon = initialData?.icon || "shopping";
 
     try {
+      // Siempre categorizamos si es nuevo o si cambió la descripción
       if (!initialData || description !== initialData.description) {
-        if (type === TransactionType.EXPENSE) {
-          const result = await categorizeTransaction(description);
-          category = result.category;
-          subCategory = result.subCategory;
-          finalIcon = result.icon;
-        } else {
-          category = "Sueldo";
-          finalIcon = 'salary';
-        }
+        const result = await categorizeTransaction(description, type);
+        category = result.category;
+        subCategory = result.subCategory;
+        finalIcon = result.icon;
       }
       
       onAdd({

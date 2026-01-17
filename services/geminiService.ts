@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction, CategorizationResult } from "../types";
+import { Transaction, CategorizationResult, TransactionType } from "../types";
 
 // Acceso seguro a la API KEY
 const getApiKey = () => {
@@ -34,15 +34,24 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
   }
 };
 
-export const categorizeTransaction = async (description: string): Promise<CategorizationResult> => {
-  const categories = ["Comida", "Transporte", "Ocio", "Hogar", "Salud", "Educación", "Sueldo", "Inversión", "Otros"];
-  const icons = ["food", "transport", "leisure", "home", "health", "education", "salary", "investment", "shopping", "other"];
+export const categorizeTransaction = async (description: string, type: TransactionType): Promise<CategorizationResult> => {
+  const categories = ["Comida", "Transporte", "Ocio", "Hogar", "Salud", "Educación", "Sueldo", "Inversión", "Ventas", "Honorarios", "Otros"];
+  const icons = ["food", "transport", "leisure", "home", "health", "education", "salary", "investment", "business", "professional", "shopping", "other"];
   
-  const prompt = `Analiza la descripción: "${description}". 
-  1. Clasifícala en una categoría: ${categories.join(", ")}. 
-  2. Sugiere una sub-categoría. 
-  3. Elige el icono más representativo SOLO de esta lista: ${icons.join(", ")}.
-  4. Indica el puntaje de confianza (0-1).`;
+  const typeStr = type === TransactionType.INCOME ? "INGRESO" : "GASTO";
+
+  const prompt = `Analiza la descripción de esta transacción de tipo ${typeStr}: "${description}". 
+  
+  REGLAS DE CATEGORIZACIÓN:
+  1. Si menciona "gasolina", "combustible", "uber" o "taxi" -> Categoría: "Transporte", Icono: "transport".
+  2. Si menciona "casa", "luz", "agua", "hogar", "alquiler" -> Categoría: "Hogar", Icono: "home".
+  3. Si menciona "costillas", "restaurante", "pizza", "comida", "supermercado" -> Categoría: "Comida", Icono: "food".
+  4. Si menciona "venta", "producto", "mercancía", "tinta" -> Categoría: "Ventas", Icono: "business".
+  5. Si menciona "soporte", "técnico", "asesoría", "servicio profesional", "honorarios" -> Categoría: "Honorarios", Icono: "professional".
+  6. Si es un ingreso de nómina o trabajo estable -> Categoría: "Sueldo", Icono: "salary".
+  
+  Devuelve el resultado en JSON usando las categorías permitidas: ${categories.join(", ")} 
+  y los iconos permitidos: ${icons.join(", ")}.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -59,7 +68,7 @@ export const categorizeTransaction = async (description: string): Promise<Catego
             },
             subCategory: {
               type: Type.STRING,
-              description: "Sub-categoría específica.",
+              description: "Sub-categoría específica sugerida.",
             },
             icon: {
               type: Type.STRING,
