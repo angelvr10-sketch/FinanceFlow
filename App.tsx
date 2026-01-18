@@ -31,6 +31,15 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Función para ordenar cuentas: EFECTIVO siempre primero
+  const sortAccounts = (accs: Account[]) => {
+    return [...accs].sort((a, b) => {
+      if (a.type === 'EFECTIVO') return -1;
+      if (b.type === 'EFECTIVO') return 1;
+      return 0;
+    });
+  };
+
   const mapToDB = (t: any) => ({
     id: t.id,
     account_id: t.accountId,
@@ -60,7 +69,9 @@ const App: React.FC = () => {
     setIsSyncing(true);
     try {
       const { data: accData } = await supabase.from('accounts').select('*');
-      if (accData) setAccounts(accData);
+      if (accData && accData.length > 0) {
+        setAccounts(sortAccounts(accData));
+      }
 
       const { data: txData } = await supabase.from('transactions').select('*');
       if (txData) setTransactions(txData.map(mapFromDB));
@@ -96,7 +107,7 @@ const App: React.FC = () => {
     const savedAcc = localStorage.getItem('ff_accounts');
     const savedTempl = localStorage.getItem('ff_templates');
     if (savedTx) setTransactions(JSON.parse(savedTx));
-    if (savedAcc) setAccounts(JSON.parse(savedAcc));
+    if (savedAcc) setAccounts(sortAccounts(JSON.parse(savedAcc)));
     if (savedTempl) setTemplates(JSON.parse(savedTempl));
     fetchCloudData();
   }, [fetchCloudData]);
@@ -122,7 +133,7 @@ const App: React.FC = () => {
     reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
-        if (data.accounts) setAccounts(data.accounts);
+        if (data.accounts) setAccounts(sortAccounts(data.accounts));
         if (data.transactions) setTransactions(data.transactions);
         if (data.templates) setTemplates(data.templates);
         setIsSettingsOpen(false);
@@ -177,11 +188,13 @@ const App: React.FC = () => {
   };
 
   const handleAddAccount = async (acc: Account) => {
-    setAccounts(prev => [...prev, acc]);
+    const newAccounts = sortAccounts([...accounts, acc]);
+    setAccounts(newAccounts);
     if (supabase) await supabase.from('accounts').upsert(acc);
   };
   const handleUpdateAccount = async (acc: Account) => {
-    setAccounts(prev => prev.map(a => a.id === acc.id ? acc : a));
+    const newAccounts = sortAccounts(accounts.map(a => a.id === acc.id ? acc : a));
+    setAccounts(newAccounts);
     if (supabase) await supabase.from('accounts').update(acc).eq('id', acc.id);
   };
   const handleDeleteAccount = async (id: string) => {
@@ -228,7 +241,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Barra de Navegación Inferior con Iconos Originales */}
+      {/* Barra de Navegación Inferior */}
       <div className="fixed bottom-10 left-0 right-0 flex justify-center pointer-events-none px-4 max-w-md mx-auto z-40">
         <div className="flex gap-4 pointer-events-auto items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl p-4 rounded-[4rem] shadow-2xl border border-slate-100 dark:border-slate-800 transition-all w-full justify-between px-8">
           <button onClick={() => setCurrentView('dashboard')} className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${currentView === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400'}`}>

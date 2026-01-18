@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Transaction, TransactionType, Account, TransactionTemplate } from '../types';
 import { categorizeTransaction } from '../services/geminiService';
 import { CategoryIcons } from './Icons';
@@ -19,14 +19,21 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
   const [type, setType] = useState<TransactionType>(initialData ? initialData.type : TransactionType.EXPENSE);
   
   // Lógica para determinar la cuenta por defecto: Prioridad a Efectivo
-  const defaultAccountId = useMemo(() => {
+  const getPreferredAccount = () => {
     if (initialData) return initialData.accountId;
     const cashAcc = accounts.find(a => a.type === 'EFECTIVO');
     return cashAcc ? cashAcc.id : (accounts[0]?.id || '');
-  }, [accounts, initialData]);
+  };
 
-  const [accountId, setAccountId] = useState(defaultAccountId);
+  const [accountId, setAccountId] = useState(getPreferredAccount());
   const [isCategorizing, setIsCategorizing] = useState(false);
+
+  // Sincronizar cuenta si los datos de cuentas cambian (ej: cargados desde nube tras abrir modal)
+  useEffect(() => {
+    if (!accountId && accounts.length > 0) {
+      setAccountId(getPreferredAccount());
+    }
+  }, [accounts]);
 
   const applyTemplate = (t: TransactionTemplate) => {
     setAmount(t.amount.toString());
