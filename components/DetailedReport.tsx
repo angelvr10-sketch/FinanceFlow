@@ -63,9 +63,10 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
     const headers = ["Fecha", "Descripcion", "Categoria", "Subcategoria", "Tipo", "Monto"];
     const rows = filteredData.map(t => [
       new Date(t.date).toLocaleDateString(),
-      t.description.replace(/,/g, ''),
-      t.category,
-      t.subCategory || '',
+      // Envolvemos en comillas para mayor seguridad con caracteres especiales y comas
+      `"${t.description.replace(/"/g, '""')}"`,
+      `"${t.category}"`,
+      `"${t.subCategory || ''}"`,
       t.type,
       t.amount
     ]);
@@ -75,7 +76,10 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
       ...rows.map(row => row.join(","))
     ].join("\n");
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // \uFEFF es el BOM (Byte Order Mark) para UTF-8. 
+    // Esto obliga a Excel a reconocer que el archivo tiene acentos y caracteres especiales.
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     const periodName = periodType === 'MES' ? `${MONTHS[selectedMonth]}_${selectedYear}` : `${selectedYear}`;
@@ -86,6 +90,7 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, is
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
