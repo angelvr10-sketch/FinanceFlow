@@ -31,7 +31,6 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Función para ordenar cuentas: EFECTIVO siempre primero
   const sortAccounts = (accs: Account[]) => {
     return [...accs].sort((a, b) => {
       if (a.type === 'EFECTIVO') return -1;
@@ -241,7 +240,6 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Barra de Navegación Inferior */}
       <div className="fixed bottom-10 left-0 right-0 flex justify-center pointer-events-none px-4 max-w-md mx-auto z-40">
         <div className="flex gap-4 pointer-events-auto items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl p-4 rounded-[4rem] shadow-2xl border border-slate-100 dark:border-slate-800 transition-all w-full justify-between px-8">
           <button onClick={() => setCurrentView('dashboard')} className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${currentView === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400'}`}>

@@ -53,16 +53,11 @@ const ICON_MAP: Record<string, string> = {
   "Otros Gastos": "other"
 };
 
-/**
- * Encuentra la categoría más cercana en caso de que la IA devuelva un nombre ligeramente distinto.
- */
 const findBestCategoryMatch = (input: string, allowed: string[]): string | null => {
   const normalizedInput = input.toLowerCase().trim();
-  // Coincidencia exacta (ignorando mayúsculas)
   const exactMatch = allowed.find(cat => cat.toLowerCase() === normalizedInput);
   if (exactMatch) return exactMatch;
 
-  // Coincidencia parcial (si el input está contenido en la categoría o viceversa)
   const partialMatch = allowed.find(cat => 
     normalizedInput.includes(cat.toLowerCase()) || 
     cat.toLowerCase().includes(normalizedInput)
@@ -87,9 +82,7 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
   FORMATO DE RESPUESTA:
   • Punto 1: Análisis de tendencia.
   • Punto 2: Oportunidad de ahorro o inversión.
-  • Punto 3: Acción inmediata recomendada.
-  
-  Sé extremadamente breve pero impactante.`;
+  • Punto 3: Acción inmediata recomendada.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -141,16 +134,17 @@ export const categorizeTransaction = async (description: string, type: Transacti
       },
     });
 
-    // Limpieza de la respuesta para asegurar que sea JSON puro
-    let cleanText = response.text.trim();
+    // Fix TS18048: Check if text exists before using it
+    const rawText = response.text;
+    if (!rawText) throw new Error("No response text from AI");
+
+    let cleanText = rawText.trim();
     if (cleanText.startsWith("```")) {
       cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "").trim();
     }
 
     const result = JSON.parse(cleanText);
-    
-    // Validar con coincidencia flexible
-    const matchedCategory = findBestCategoryMatch(result.category, allowedCategories);
+    const matchedCategory = findBestCategoryMatch(result.category || "", allowedCategories);
     const finalCategory = matchedCategory || (isIncome ? "Otros Ingresos" : "Otros Gastos");
 
     return {
@@ -161,7 +155,6 @@ export const categorizeTransaction = async (description: string, type: Transacti
     };
   } catch (error) {
     console.error("IA Categorization Error:", error);
-    // Fallback inteligente basado solo en palabras clave básicas si la IA falla
     const desc = description.toLowerCase();
     let fallbackCat = isIncome ? "Otros Ingresos" : "Otros Gastos";
     
