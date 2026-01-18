@@ -3,11 +3,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
 const getApiKey = () => {
-  const key = process.env.API_KEY || '';
-  if (!key) {
-    console.warn("⚠️ FinanceFlow: API_KEY no configurada.");
+  try {
+    return process.env.API_KEY || '';
+  } catch (e) {
+    return '';
   }
-  return key;
 };
 
 const EXPENSE_CATEGORIES = [
@@ -58,20 +58,14 @@ const ICON_MAP: Record<string, string> = {
 const findBestCategoryMatch = (input: string, allowed: string[]): string | null => {
   if (!input) return null;
   const normalizedInput = input.toLowerCase().trim();
-  
   const exactMatch = allowed.find(cat => cat.toLowerCase() === normalizedInput);
   if (exactMatch) return exactMatch;
-
-  const partialMatch = allowed.find(cat => 
-    normalizedInput.includes(cat.toLowerCase()) || 
-    cat.toLowerCase().includes(normalizedInput)
-  );
-  return partialMatch || null;
+  return allowed.find(cat => normalizedInput.includes(cat.toLowerCase()) || cat.toLowerCase().includes(normalizedInput)) || null;
 };
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) return "Configura tu API_KEY para recibir consejos financieros.";
+  if (!apiKey) return "⚠️ AI Desactivada: Configura tu API_KEY en el panel de Netlify/Vercel para recibir consejos.";
   if (transactions.length === 0) return "Aún no tienes transacciones para analizar.";
 
   const ai = new GoogleGenAI({ apiKey });
@@ -82,120 +76,108 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
     d: t.description
   }));
 
-  const prompt = `Analiza este historial financiero y dame 3 consejos estratégicos breves: ${JSON.stringify(dataSummary)}`;
-
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
+      contents: `Analiza este historial y dame 3 consejos financieros breves: ${JSON.stringify(dataSummary)}`,
       config: {
-        systemInstruction: "Eres un asesor financiero experto. Responde en español neutro con puntos claros.",
+        systemInstruction: "Eres un asesor financiero experto. Responde en español.",
         temperature: 0.5,
       }
     });
-    
-    return response.text ?? "Continúa registrando para obtener un análisis detallado.";
+    return response.text ?? "Continúa registrando para obtener análisis.";
   } catch (error) {
-    console.error("Advice error:", error);
-    return "No se pudo conectar con el asesor.";
+    return "Error al conectar con el asesor IA.";
   }
 };
 
 export const categorizeTransaction = async (description: string, type: TransactionType): Promise<CategorizationResult> => {
   const apiKey = getApiKey();
   const isIncome = type === TransactionType.INCOME;
-  const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-  const fallbackCat = isIncome ? "Otros Ingresos" : "Otros Gastos";
-
-  if (!apiKey) {
-    return localFallback(description, isIncome);
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
-  const typeLabel = isIncome ? "INGRESO" : "GASTO";
-
-  const prompt = `Clasifica esta transacción: "${description}" (Tipo: ${typeLabel}). 
   
-  CATEGORÍAS PERMITIDAS: [${allowedCategories.join(", ")}]. 
-  
-  EJEMPLOS DE CLASIFICACIÓN CORRECTA:
-  - "Gastos hogar" -> Vivienda y Hogar
-  - "Leche bebe" -> Bebé y Maternidad
-  - "Prestamo banco" -> Gastos Financieros
-  - "Netflix" -> Servicios y Suscripciones
-  - "Nomina" -> Sueldo y Salario
-  
-  Responde estrictamente en JSON.`;
+  // PRIMERO: Intentar coincidencia local de alta prioridad (Hogar, Bebé, Préstamo)
+  const localAttempt = localFallback(description, isIncome);
+  if (localAttempt.confidence === 1) return localAttempt;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        systemInstruction: `Eres un experto contable. NUNCA uses "Otros" si puedes asignar la transacción a una categoría específica de la lista. Si el usuario dice "hogar", usa "Vivienda y Hogar". Si dice "leche" o "bebe", usa "Bebé y Maternidad". Si dice "prestamo", usa "Gastos Financieros".`,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            category: { type: Type.STRING },
-            subCategory: { type: Type.STRING },
-            confidence: { type: Type.NUMBER },
+  // SEGUNDO: Si hay API_KEY, usar Gemini
+  if (apiKey) {
+    const ai = new GoogleGenAI({ apiKey });
+    const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Clasifica: "${description}" (Tipo: ${isIncome ? 'INGRESO' : 'GASTO'}). Categorías: [${allowedCategories.join(", ")}]. Responde JSON con: category, subCategory, confidence.`,
+        config: {
+          systemInstruction: "Eres un experto contable. Prioriza categorías específicas como 'Bebé', 'Vivienda' o 'Financieros' antes que 'Otros'.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              category: { type: Type.STRING },
+              subCategory: { type: Type.STRING },
+              confidence: { type: Type.NUMBER },
+            },
+            required: ["category", "subCategory", "confidence"],
           },
-          required: ["category", "subCategory", "confidence"],
         },
-      },
-    });
+      });
 
-    const rawText: string = response.text || "";
-    if (!rawText) throw new Error("Respuesta vacía");
-
-    const result = JSON.parse(rawText);
-    const matchedCategory = findBestCategoryMatch(result.category, allowedCategories);
-    
-    // Doble validación manual para descripciones críticas
-    let finalCategory = matchedCategory || fallbackCat;
-    const descLower = description.toLowerCase();
-    
-    if (!isIncome) {
-      if (descLower.includes("hogar") || descLower.includes("renta")) finalCategory = "Vivienda y Hogar";
-      if (descLower.includes("bebe") || descLower.includes("leche") || descLower.includes("pañal")) finalCategory = "Bebé y Maternidad";
-      if (descLower.includes("prestamo") || descLower.includes("banco") || descLower.includes("credito")) finalCategory = "Gastos Financieros";
+      const result = JSON.parse(response.text || "{}");
+      const matched = findBestCategoryMatch(result.category, allowedCategories);
+      if (matched) {
+        return {
+          category: matched,
+          subCategory: result.subCategory || "General",
+          icon: ICON_MAP[matched] || "other",
+          confidence: result.confidence || 0.8,
+        };
+      }
+    } catch (e) {
+      console.warn("IA falló, usando fallback local...");
     }
-
-    return {
-      category: finalCategory,
-      subCategory: result.subCategory || "General",
-      icon: ICON_MAP[finalCategory] || "other",
-      confidence: result.confidence || 0.5,
-    };
-  } catch (error) {
-    console.error("Gemini Categorization Error:", error);
-    return localFallback(description, isIncome);
   }
+
+  // TERCERO: Fallback final
+  return localAttempt;
 };
 
 function localFallback(description: string, isIncome: boolean): CategorizationResult {
-  const desc = description.toLowerCase();
+  const desc = description.toLowerCase().trim();
   let category = isIncome ? "Otros Ingresos" : "Otros Gastos";
+  let confidence = 0.1;
 
   if (!isIncome) {
-    if (/comida|rest|uber|cena|almuerzo|cafe|desayuno|taco|pizza/.test(desc)) category = "Comida y Bebida";
-    else if (/trans|gasol|uber|didi|taxi|bus|metro|viaje/.test(desc)) category = "Transporte";
-    else if (/renta|casa|luz|agua|gas|hogar|mueble/.test(desc)) category = "Vivienda y Hogar";
-    else if (/cine|netflix|spotify|ocio|juego|diversion/.test(desc)) category = "Ocio y Entretenimiento";
-    else if (/farmacia|doctor|medico|salud|gym|gimnasio/.test(desc)) category = "Salud y Bienestar";
-    else if (/compra|ropa|mall|amazon|mercado/.test(desc)) category = "Compras y Ropa";
-    else if (/bebe|leche|pañal|maternidad|baby/.test(desc)) category = "Bebé y Maternidad";
-    else if (/prestamo|banco|credito|interes|comision/.test(desc)) category = "Gastos Financieros";
+    // Coincidencias de alta precisión (Confidence 1)
+    if (desc.includes("hogar") || desc.includes("casa") || desc.includes("renta")) {
+      category = "Vivienda y Hogar";
+      confidence = 1;
+    } else if (desc.includes("bebe") || desc.includes("leche") || desc.includes("pañal") || desc.includes("maternidad")) {
+      category = "Bebé y Maternidad";
+      confidence = 1;
+    } else if (desc.includes("prestamo") || desc.includes("banco") || desc.includes("credito") || desc.includes("financiero")) {
+      category = "Gastos Financieros";
+      confidence = 1;
+    } else if (desc.includes("gasol") || desc.includes("trans") || desc.includes("uber") || desc.includes("taxi")) {
+      category = "Transporte";
+      confidence = 0.9;
+    } else if (desc.includes("comida") || desc.includes("rest") || desc.includes("cena") || desc.includes("cafe")) {
+      category = "Comida y Bebida";
+      confidence = 0.9;
+    }
   } else {
-    if (/nomina|sueldo|salario|pago/.test(desc)) category = "Sueldo y Salario";
-    else if (/venta|negocio|cliente/.test(desc)) category = "Ventas y Negocios";
+    if (desc.includes("nomina") || desc.includes("sueldo") || desc.includes("pago")) {
+      category = "Sueldo y Salario";
+      confidence = 1;
+    } else if (desc.includes("venta") || desc.includes("tinta") || desc.includes("pago cliente")) {
+      category = "Ventas y Negocios";
+      confidence = 1;
+    }
   }
 
   return {
     category,
-    subCategory: "Detección Inteligente",
+    subCategory: confidence === 1 ? "Clasificación Directa" : "Detección Inteligente",
     icon: ICON_MAP[category] || "other",
-    confidence: 0
+    confidence
   };
 }
