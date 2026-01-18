@@ -236,7 +236,7 @@ const App: React.FC = () => {
             <AIConsultant transactions={transactions} />
           </>
         ) : (
-          <DetailedReport transactions={transactions} isDarkMode={isDarkMode} />
+          <DetailedReport transactions={transactions} accounts={accounts} isDarkMode={isDarkMode} />
         )}
       </div>
 
