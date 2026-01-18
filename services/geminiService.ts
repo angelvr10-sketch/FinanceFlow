@@ -3,14 +3,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
 const getApiKey = () => {
-  try {
-    return process.env.API_KEY || '';
-  } catch (e) {
-    return '';
+  // En Netlify/Vercel, process.env.API_KEY debe estar configurado en el panel de control
+  const key = process.env.API_KEY || '';
+  if (!key) {
+    console.warn("⚠️ FinanceFlow: API_KEY no configurada. La categorización por IA no funcionará.");
   }
+  return key;
 };
-
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 const EXPENSE_CATEGORIES = [
   "Comida y Bebida", 
@@ -54,10 +53,14 @@ const ICON_MAP: Record<string, string> = {
 };
 
 const findBestCategoryMatch = (input: string, allowed: string[]): string | null => {
+  if (!input) return null;
   const normalizedInput = input.toLowerCase().trim();
+  
+  // Intento 1: Coincidencia exacta
   const exactMatch = allowed.find(cat => cat.toLowerCase() === normalizedInput);
   if (exactMatch) return exactMatch;
 
+  // Intento 2: Coincidencia parcial (la entrada contiene la categoría o viceversa)
   const partialMatch = allowed.find(cat => 
     normalizedInput.includes(cat.toLowerCase()) || 
     cat.toLowerCase().includes(normalizedInput)
@@ -66,8 +69,11 @@ const findBestCategoryMatch = (input: string, allowed: string[]): string | null 
 };
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) return "Configura tu API_KEY para recibir consejos financieros.";
   if (transactions.length === 0) return "Aún no tienes transacciones para analizar.";
 
+  const ai = new GoogleGenAI({ apiKey });
   const dataSummary = transactions.slice(0, 25).map(t => ({
     t: t.type === TransactionType.INCOME ? 'INGRESO' : 'GASTO',
     c: t.category,
@@ -75,52 +81,50 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
     d: t.description
   }));
 
-  const prompt = `Actúa como un asesor financiero personal de alto nivel. 
-  Analiza este historial reciente y dame 3 consejos estratégicos personalizados.
-  Historial: ${JSON.stringify(dataSummary)}
-  
-  FORMATO DE RESPUESTA:
-  • Punto 1: Análisis de tendencia.
-  • Punto 2: Oportunidad de ahorro o inversión.
-  • Punto 3: Acción inmediata recomendada.`;
+  const prompt = `Analiza este historial financiero y dame 3 consejos estratégicos breves: ${JSON.stringify(dataSummary)}`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: "Eres un asesor financiero experto. Hablas español neutro y profesional.",
-        temperature: 0.4,
+        systemInstruction: "Eres un asesor financiero experto. Responde en español neutro con puntos claros.",
+        temperature: 0.5,
       }
     });
     
-    return response.text || "Sigue registrando para obtener mejores consejos.";
+    // Solución TS18048: Aseguramos que tratamos el texto como string o vacío
+    return response.text ?? "Continúa registrando para obtener un análisis detallado.";
   } catch (error) {
     console.error("Advice error:", error);
-    return "No pude conectar con el asesor en este momento.";
+    return "No se pudo conectar con el asesor. Verifica tu conexión y configuración de API.";
   }
 };
 
 export const categorizeTransaction = async (description: string, type: TransactionType): Promise<CategorizationResult> => {
+  const apiKey = getApiKey();
   const isIncome = type === TransactionType.INCOME;
   const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const fallbackCat = isIncome ? "Otros Ingresos" : "Otros Gastos";
+
+  // Si no hay API Key, usamos lógica de respaldo inmediata
+  if (!apiKey) {
+    return localFallback(description, isIncome);
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   const typeLabel = isIncome ? "INGRESO" : "GASTO";
 
-  const prompt = `Clasifica esta operación: "${description}"
-  Tipo: ${typeLabel}
-  Lista obligatoria de categorías: [${allowedCategories.join(", ")}]
-  
-  Reglas:
-  - Responde UNICAMENTE en formato JSON.
-  - Selecciona la categoría que mejor encaje de la lista proporcionada.
-  - Crea una subcategoría muy breve.`;
+  const prompt = `Clasifica: "${description}" (Tipo: ${typeLabel}). 
+  Debes elegir una de estas: [${allowedCategories.join(", ")}]. 
+  Responde solo JSON con: category, subCategory, confidence.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: `Eres un experto en contabilidad. Clasificas gastos e ingresos basándote estrictamente en las categorías permitidas.`,
+        systemInstruction: `Eres un clasificador contable ultra-preciso. Tu misión es evitar a toda costa la categoría "Otros" si existe una más específica disponible.`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -134,18 +138,13 @@ export const categorizeTransaction = async (description: string, type: Transacti
       },
     });
 
-    // Fix TS18048: Check if text exists before using it
-    const rawText = response.text;
-    if (!rawText) throw new Error("No response text from AI");
+    // Solución definitiva TS18048 para Netlify
+    const rawText: string = response.text || "";
+    if (!rawText) throw new Error("Respuesta vacía");
 
-    let cleanText = rawText.trim();
-    if (cleanText.startsWith("```")) {
-      cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "").trim();
-    }
-
-    const result = JSON.parse(cleanText);
-    const matchedCategory = findBestCategoryMatch(result.category || "", allowedCategories);
-    const finalCategory = matchedCategory || (isIncome ? "Otros Ingresos" : "Otros Gastos");
+    const result = JSON.parse(rawText);
+    const matchedCategory = findBestCategoryMatch(result.category, allowedCategories);
+    const finalCategory = matchedCategory || fallbackCat;
 
     return {
       category: finalCategory,
@@ -154,20 +153,33 @@ export const categorizeTransaction = async (description: string, type: Transacti
       confidence: result.confidence || 0.5,
     };
   } catch (error) {
-    console.error("IA Categorization Error:", error);
-    const desc = description.toLowerCase();
-    let fallbackCat = isIncome ? "Otros Ingresos" : "Otros Gastos";
-    
-    if (!isIncome) {
-      if (desc.includes("comida") || desc.includes("rest") || desc.includes("uber eat")) fallbackCat = "Comida y Bebida";
-      if (desc.includes("uber") || desc.includes("taxi") || desc.includes("gasol")) fallbackCat = "Transporte";
-    }
-
-    return { 
-      category: fallbackCat, 
-      subCategory: "Detección Automática",
-      icon: ICON_MAP[fallbackCat] || "other", 
-      confidence: 0 
-    };
+    console.error("Gemini Categorization Error:", error);
+    return localFallback(description, isIncome);
   }
 };
+
+// Lógica de respaldo local mejorada cuando falla la IA o no hay Key
+function localFallback(description: string, isIncome: boolean): CategorizationResult {
+  const desc = description.toLowerCase();
+  let category = isIncome ? "Otros Ingresos" : "Otros Gastos";
+  let sub = "Detección Local";
+
+  if (!isIncome) {
+    if (/comida|rest|uber|cena|almuerzo|cafe|desayuno|taco|pizza/.test(desc)) category = "Comida y Bebida";
+    else if (/trans|gasol|uber|didi|taxi|bus|metro|viaje/.test(desc)) category = "Transporte";
+    else if (/renta|casa|luz|agua|gas|hogar|mueble/.test(desc)) category = "Vivienda y Hogar";
+    else if (/cine|netflix|spotify|ocio|juego|diversion/.test(desc)) category = "Ocio y Entretenimiento";
+    else if (/farmacia|doctor|medico|salud|gym|gimnasio/.test(desc)) category = "Salud y Bienestar";
+    else if (/compra|ropa|mall|amazon|mercado/.test(desc)) category = "Compras y Ropa";
+  } else {
+    if (/nomina|sueldo|salario|pago/.test(desc)) category = "Sueldo y Salario";
+    else if (/venta|negocio|cliente/.test(desc)) category = "Ventas y Negocios";
+  }
+
+  return {
+    category,
+    subCategory: sub,
+    icon: ICON_MAP[category] || "other",
+    confidence: 0
+  };
+}
