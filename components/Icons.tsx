@@ -59,7 +59,7 @@ export const CategoryIcons: Record<string, React.ReactNode> = {
   ),
   other: (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 7h.01M7 11h.01M7 15h.01M11 7h.01M11 11h.01M11 15h.01M15 7h.01M15 11h.01M15 15h.01M19 7h.01M19 11h.01M19 15h.01M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 7h.01M7 11h.01M7 15h.01M11 7h.01M11 11h.01M11 15h.01M15 7h.01M15 11h.01M15 15h.01M19 7h.01M19 11h.01M19 15h.01M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   ),
 };
@@ -70,12 +70,12 @@ export const getDefaultIcon = (category: string): string => {
   if (cat.includes('transporte') || cat.includes('uber') || cat.includes('gasolina') || cat.includes('viaje')) return 'transport';
   if (cat.includes('ocio') || cat.includes('cine') || cat.includes('entretenimiento')) return 'leisure';
   if (cat.includes('hogar') || cat.includes('renta') || cat.includes('luz')) return 'home';
-  if (cat.includes('salud') || cat.includes('farmacia') || cat.includes('doctor')) return 'health';
+  if (cat.includes('salud') || cat.includes('farmacia') || cat.includes('doctor') || cat.includes('bebe')) return 'health';
   if (cat.includes('educación') || cat.includes('curso') || cat.includes('libro')) return 'education';
   if (cat.includes('sueldo') || cat.includes('nomina')) return 'salary';
   if (cat.includes('venta') || cat.includes('negocio')) return 'business';
   if (cat.includes('honorarios') || cat.includes('soporte') || cat.includes('servicio')) return 'professional';
-  if (cat.includes('inversión') || cat.includes('ahorro')) return 'investment';
+  if (cat.includes('inversión') || cat.includes('ahorro') || cat.includes('financiero') || cat.includes('prestamo')) return 'investment';
   if (cat.includes('otros')) return 'other';
   return 'shopping';
 };

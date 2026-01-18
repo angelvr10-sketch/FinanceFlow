@@ -3,10 +3,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
 const getApiKey = () => {
-  // En Netlify/Vercel, process.env.API_KEY debe estar configurado en el panel de control
   const key = process.env.API_KEY || '';
   if (!key) {
-    console.warn("⚠️ FinanceFlow: API_KEY no configurada. La categorización por IA no funcionará.");
+    console.warn("⚠️ FinanceFlow: API_KEY no configurada.");
   }
   return key;
 };
@@ -20,7 +19,9 @@ const EXPENSE_CATEGORIES = [
   "Educación", 
   "Compras y Ropa", 
   "Servicios y Suscripciones", 
-  "Viajes", 
+  "Viajes",
+  "Bebé y Maternidad",
+  "Gastos Financieros",
   "Otros Gastos"
 ];
 
@@ -43,6 +44,8 @@ const ICON_MAP: Record<string, string> = {
   "Compras y Ropa": "shopping",
   "Servicios y Suscripciones": "other",
   "Viajes": "transport",
+  "Bebé y Maternidad": "health",
+  "Gastos Financieros": "investment",
   "Sueldo y Salario": "salary",
   "Ventas y Negocios": "business",
   "Honorarios Profesionales": "professional",
@@ -56,11 +59,9 @@ const findBestCategoryMatch = (input: string, allowed: string[]): string | null 
   if (!input) return null;
   const normalizedInput = input.toLowerCase().trim();
   
-  // Intento 1: Coincidencia exacta
   const exactMatch = allowed.find(cat => cat.toLowerCase() === normalizedInput);
   if (exactMatch) return exactMatch;
 
-  // Intento 2: Coincidencia parcial (la entrada contiene la categoría o viceversa)
   const partialMatch = allowed.find(cat => 
     normalizedInput.includes(cat.toLowerCase()) || 
     cat.toLowerCase().includes(normalizedInput)
@@ -93,11 +94,10 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
       }
     });
     
-    // Solución TS18048: Aseguramos que tratamos el texto como string o vacío
     return response.text ?? "Continúa registrando para obtener un análisis detallado.";
   } catch (error) {
     console.error("Advice error:", error);
-    return "No se pudo conectar con el asesor. Verifica tu conexión y configuración de API.";
+    return "No se pudo conectar con el asesor.";
   }
 };
 
@@ -107,7 +107,6 @@ export const categorizeTransaction = async (description: string, type: Transacti
   const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const fallbackCat = isIncome ? "Otros Ingresos" : "Otros Gastos";
 
-  // Si no hay API Key, usamos lógica de respaldo inmediata
   if (!apiKey) {
     return localFallback(description, isIncome);
   }
@@ -115,16 +114,25 @@ export const categorizeTransaction = async (description: string, type: Transacti
   const ai = new GoogleGenAI({ apiKey });
   const typeLabel = isIncome ? "INGRESO" : "GASTO";
 
-  const prompt = `Clasifica: "${description}" (Tipo: ${typeLabel}). 
-  Debes elegir una de estas: [${allowedCategories.join(", ")}]. 
-  Responde solo JSON con: category, subCategory, confidence.`;
+  const prompt = `Clasifica esta transacción: "${description}" (Tipo: ${typeLabel}). 
+  
+  CATEGORÍAS PERMITIDAS: [${allowedCategories.join(", ")}]. 
+  
+  EJEMPLOS DE CLASIFICACIÓN CORRECTA:
+  - "Gastos hogar" -> Vivienda y Hogar
+  - "Leche bebe" -> Bebé y Maternidad
+  - "Prestamo banco" -> Gastos Financieros
+  - "Netflix" -> Servicios y Suscripciones
+  - "Nomina" -> Sueldo y Salario
+  
+  Responde estrictamente en JSON.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: `Eres un clasificador contable ultra-preciso. Tu misión es evitar a toda costa la categoría "Otros" si existe una más específica disponible.`,
+        systemInstruction: `Eres un experto contable. NUNCA uses "Otros" si puedes asignar la transacción a una categoría específica de la lista. Si el usuario dice "hogar", usa "Vivienda y Hogar". Si dice "leche" o "bebe", usa "Bebé y Maternidad". Si dice "prestamo", usa "Gastos Financieros".`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -138,13 +146,21 @@ export const categorizeTransaction = async (description: string, type: Transacti
       },
     });
 
-    // Solución definitiva TS18048 para Netlify
     const rawText: string = response.text || "";
     if (!rawText) throw new Error("Respuesta vacía");
 
     const result = JSON.parse(rawText);
     const matchedCategory = findBestCategoryMatch(result.category, allowedCategories);
-    const finalCategory = matchedCategory || fallbackCat;
+    
+    // Doble validación manual para descripciones críticas
+    let finalCategory = matchedCategory || fallbackCat;
+    const descLower = description.toLowerCase();
+    
+    if (!isIncome) {
+      if (descLower.includes("hogar") || descLower.includes("renta")) finalCategory = "Vivienda y Hogar";
+      if (descLower.includes("bebe") || descLower.includes("leche") || descLower.includes("pañal")) finalCategory = "Bebé y Maternidad";
+      if (descLower.includes("prestamo") || descLower.includes("banco") || descLower.includes("credito")) finalCategory = "Gastos Financieros";
+    }
 
     return {
       category: finalCategory,
@@ -158,11 +174,9 @@ export const categorizeTransaction = async (description: string, type: Transacti
   }
 };
 
-// Lógica de respaldo local mejorada cuando falla la IA o no hay Key
 function localFallback(description: string, isIncome: boolean): CategorizationResult {
   const desc = description.toLowerCase();
   let category = isIncome ? "Otros Ingresos" : "Otros Gastos";
-  let sub = "Detección Local";
 
   if (!isIncome) {
     if (/comida|rest|uber|cena|almuerzo|cafe|desayuno|taco|pizza/.test(desc)) category = "Comida y Bebida";
@@ -171,6 +185,8 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
     else if (/cine|netflix|spotify|ocio|juego|diversion/.test(desc)) category = "Ocio y Entretenimiento";
     else if (/farmacia|doctor|medico|salud|gym|gimnasio/.test(desc)) category = "Salud y Bienestar";
     else if (/compra|ropa|mall|amazon|mercado/.test(desc)) category = "Compras y Ropa";
+    else if (/bebe|leche|pañal|maternidad|baby/.test(desc)) category = "Bebé y Maternidad";
+    else if (/prestamo|banco|credito|interes|comision/.test(desc)) category = "Gastos Financieros";
   } else {
     if (/nomina|sueldo|salario|pago/.test(desc)) category = "Sueldo y Salario";
     else if (/venta|negocio|cliente/.test(desc)) category = "Ventas y Negocios";
@@ -178,7 +194,7 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
 
   return {
     category,
-    subCategory: sub,
+    subCategory: "Detección Inteligente",
     icon: ICON_MAP[category] || "other",
     confidence: 0
   };
