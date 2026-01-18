@@ -52,7 +52,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ accounts, onAdd,
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex flex-col p-6 z-[120] animate-in slide-in-from-bottom duration-300">
+    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex flex-col p-6 z-[300] animate-in slide-in-from-bottom duration-300">
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Gestionar Cuentas</h2>
         <button 
