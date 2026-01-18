@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType, Account, TransactionTemplate } from '../types';
 import { categorizeTransaction } from '../services/geminiService';
 import { CategoryIcons } from './Icons';
@@ -17,7 +17,15 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
   const [description, setDescription] = useState(initialData ? initialData.description : '');
   const [date, setDate] = useState(initialData ? initialData.date.split('T')[0] : new Date().toISOString().split('T')[0]);
   const [type, setType] = useState<TransactionType>(initialData ? initialData.type : TransactionType.EXPENSE);
-  const [accountId, setAccountId] = useState(initialData ? initialData.accountId : accounts[0]?.id || '');
+  
+  // Lógica para determinar la cuenta por defecto: Prioridad a Efectivo
+  const defaultAccountId = useMemo(() => {
+    if (initialData) return initialData.accountId;
+    const cashAcc = accounts.find(a => a.type === 'EFECTIVO');
+    return cashAcc ? cashAcc.id : (accounts[0]?.id || '');
+  }, [accounts, initialData]);
+
+  const [accountId, setAccountId] = useState(defaultAccountId);
   const [isCategorizing, setIsCategorizing] = useState(false);
 
   const applyTemplate = (t: TransactionTemplate) => {

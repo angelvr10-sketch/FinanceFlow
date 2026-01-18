@@ -11,9 +11,9 @@ import { Transaction, Account, TransactionType, TransactionTemplate } from './ty
 import { supabase } from './services/supabase';
 
 const INITIAL_ACCOUNTS: Account[] = [
+  { id: 'acc_3', name: '💵 Efectivo', type: 'EFECTIVO', color: '#10b981' },
   { id: 'acc_1', name: '💰 Ahorros', type: 'AHORRO', color: '#6366f1' },
-  { id: 'acc_2', name: '💳 Tarjeta', type: 'TARJETA', color: '#f43f5e' },
-  { id: 'acc_3', name: '💵 Efectivo', type: 'EFECTIVO', color: '#10b981' }
+  { id: 'acc_2', name: '💳 Tarjeta', type: 'TARJETA', color: '#f43f5e' }
 ];
 
 type View = 'dashboard' | 'reports';
@@ -243,7 +243,7 @@ const App: React.FC = () => {
           </button>
           <button onClick={() => setCurrentView('reports')} className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${currentView === 'reports' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400'}`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </button>
           <button onClick={() => setIsSettingsOpen(true)} className="w-14 h-14 flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all">

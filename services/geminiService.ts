@@ -12,7 +12,6 @@ const getApiKey = () => {
 
 const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
-// Definición clara de categorías por tipo para guiar a la IA
 const EXPENSE_CATEGORIES = [
   "Comida y Bebida", 
   "Transporte", 
@@ -54,6 +53,23 @@ const ICON_MAP: Record<string, string> = {
   "Otros Gastos": "other"
 };
 
+/**
+ * Encuentra la categoría más cercana en caso de que la IA devuelva un nombre ligeramente distinto.
+ */
+const findBestCategoryMatch = (input: string, allowed: string[]): string | null => {
+  const normalizedInput = input.toLowerCase().trim();
+  // Coincidencia exacta (ignorando mayúsculas)
+  const exactMatch = allowed.find(cat => cat.toLowerCase() === normalizedInput);
+  if (exactMatch) return exactMatch;
+
+  // Coincidencia parcial (si el input está contenido en la categoría o viceversa)
+  const partialMatch = allowed.find(cat => 
+    normalizedInput.includes(cat.toLowerCase()) || 
+    cat.toLowerCase().includes(normalizedInput)
+  );
+  return partialMatch || null;
+};
+
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
   if (transactions.length === 0) return "Aún no tienes transacciones para analizar.";
 
@@ -73,22 +89,22 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
   • Punto 2: Oportunidad de ahorro o inversión.
   • Punto 3: Acción inmediata recomendada.
   
-  Sé extremadamente breve pero impactante. No uses markdown de títulos.`;
+  Sé extremadamente breve pero impactante.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: "Eres un asesor financiero experto. Analizas patrones de gasto e ingreso para maximizar el ahorro. Hablas español neutro y profesional.",
-        temperature: 0.4, // Menos aleatoriedad para consejos más consistentes
+        systemInstruction: "Eres un asesor financiero experto. Hablas español neutro y profesional.",
+        temperature: 0.4,
       }
     });
     
     return response.text || "Sigue registrando para obtener mejores consejos.";
   } catch (error) {
-    console.error("Error calling Gemini:", error);
-    return "No pude conectar con el asesor. Revisa tu presupuesto manualmente.";
+    console.error("Advice error:", error);
+    return "No pude conectar con el asesor en este momento.";
   }
 };
 
@@ -97,60 +113,67 @@ export const categorizeTransaction = async (description: string, type: Transacti
   const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const typeLabel = isIncome ? "INGRESO" : "GASTO";
 
-  const prompt = `Analiza la descripción: "${description}"
-  Esta operación es un ${typeLabel}.
+  const prompt = `Clasifica esta operación: "${description}"
+  Tipo: ${typeLabel}
+  Lista obligatoria de categorías: [${allowedCategories.join(", ")}]
   
   Reglas:
-  1. Debes elegir la categoría más lógica de esta lista: [${allowedCategories.join(", ")}].
-  2. Genera una 'subCategory' corta y específica (ej: "Netflix", "Gasolina", "Freelance").
-  3. No asignes categorías de ingreso a gastos ni viceversa.`;
+  - Responde UNICAMENTE en formato JSON.
+  - Selecciona la categoría que mejor encaje de la lista proporcionada.
+  - Crea una subcategoría muy breve.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        systemInstruction: `Eres un motor de categorización contable infalible. Tu objetivo es clasificar descripciones bancarias o personales con precisión milimétrica. Si la descripción es ambigua, usa el contexto del tipo de operación (${typeLabel}).`,
+        systemInstruction: `Eres un experto en contabilidad. Clasificas gastos e ingresos basándote estrictamente en las categorías permitidas.`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            category: { 
-              type: Type.STRING, 
-              description: "La categoría principal seleccionada de la lista permitida." 
-            },
-            subCategory: { 
-              type: Type.STRING, 
-              description: "Un término más específico derivado de la descripción." 
-            },
-            confidence: { 
-              type: Type.NUMBER, 
-              description: "Nivel de confianza de 0 a 1." 
-            },
+            category: { type: Type.STRING },
+            subCategory: { type: Type.STRING },
+            confidence: { type: Type.NUMBER },
           },
           required: ["category", "subCategory", "confidence"],
         },
       },
     });
 
-    const result = JSON.parse(response.text || "{}");
+    // Limpieza de la respuesta para asegurar que sea JSON puro
+    let cleanText = response.text.trim();
+    if (cleanText.startsWith("```")) {
+      cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "").trim();
+    }
+
+    const result = JSON.parse(cleanText);
     
-    // Validar que la categoría devuelta esté en nuestra lista (por seguridad)
-    const finalCategory = allowedCategories.includes(result.category) 
-      ? result.category 
-      : (isIncome ? "Otros Ingresos" : "Otros Gastos");
+    // Validar con coincidencia flexible
+    const matchedCategory = findBestCategoryMatch(result.category, allowedCategories);
+    const finalCategory = matchedCategory || (isIncome ? "Otros Ingresos" : "Otros Gastos");
 
     return {
       category: finalCategory,
-      subCategory: result.subCategory || "",
+      subCategory: result.subCategory || "General",
       icon: ICON_MAP[finalCategory] || "other",
       confidence: result.confidence || 0.5,
     };
   } catch (error) {
-    console.error("Categorization error:", error);
+    console.error("IA Categorization Error:", error);
+    // Fallback inteligente basado solo en palabras clave básicas si la IA falla
+    const desc = description.toLowerCase();
+    let fallbackCat = isIncome ? "Otros Ingresos" : "Otros Gastos";
+    
+    if (!isIncome) {
+      if (desc.includes("comida") || desc.includes("rest") || desc.includes("uber eat")) fallbackCat = "Comida y Bebida";
+      if (desc.includes("uber") || desc.includes("taxi") || desc.includes("gasol")) fallbackCat = "Transporte";
+    }
+
     return { 
-      category: isIncome ? "Otros Ingresos" : "Otros Gastos", 
-      icon: "other", 
+      category: fallbackCat, 
+      subCategory: "Detección Automática",
+      icon: ICON_MAP[fallbackCat] || "other", 
       confidence: 0 
     };
   }
