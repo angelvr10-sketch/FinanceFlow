@@ -3,10 +3,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
 /** 
- * Utilizamos la serie Gemini 3 para máxima estabilidad y potencia
+ * Utilizamos Gemini 3 Pro con capacidades de razonamiento profundo (Thinking)
  */
-const PRIMARY_MODEL = 'gemini-3-flash-preview';
-const FALLBACK_MODEL = 'gemini-3-pro-preview';
+const PRIMARY_MODEL = 'gemini-3-pro-preview';
+const FALLBACK_MODEL = 'gemini-3-flash-preview';
 
 const getApiKey = () => {
   try {
@@ -93,12 +93,17 @@ async function runWithFallback(
 
   for (const modelName of modelsToTry) {
     try {
+      const isPro = modelName.includes('pro');
       const response = await ai.models.generateContent({
         model: modelName,
         contents: prompt,
         config: {
           systemInstruction,
-          temperature: 0.2,
+          temperature: isPro ? 0.7 : 0.2, // Un poco más de creatividad para el Pro
+          // Activamos el presupuesto de pensamiento (Thinking Budget) para el modelo Pro
+          ...(isPro && { 
+            thinkingConfig: { thinkingBudget: 16000 } 
+          }),
           ...(isJson && { 
             responseMimeType: "application/json",
             responseSchema: schema 
@@ -111,17 +116,12 @@ async function runWithFallback(
       lastError = error;
       const errorMsg = error?.message || "";
       
-      // Retry logic for quota
       if ((errorMsg.includes('429') || errorMsg.includes('quota')) && modelName === PRIMARY_MODEL) {
-        await wait(300);
+        await wait(500);
         continue;
       }
       
-      // If model not found, try the next one
-      if (errorMsg.includes('404')) {
-        continue;
-      }
-
+      if (errorMsg.includes('404')) continue;
       throw error;
     }
   }
@@ -131,18 +131,18 @@ async function runWithFallback(
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
   if (transactions.length < 5) return "Registra al menos 5 movimientos para recibir consejos personalizados.";
   
-  const dataSummary = transactions.slice(0, 15).map(t => 
-    `${t.type === TransactionType.INCOME ? 'INGRESO' : 'GASTO'}: ${t.amount} (${t.category} - ${t.description})`
+  const dataSummary = transactions.slice(0, 30).map(t => 
+    `${t.date} | ${t.type === TransactionType.INCOME ? 'INGRESO' : 'GASTO'}: $${t.amount} | Cat: ${t.category} | Desc: ${t.description}`
   ).join('\n');
 
   try {
     return await runWithFallback(
-      `Analiza estos movimientos y proporciona 3 consejos financieros accionables y breves:\n${dataSummary}`,
-      "Eres un consultor financiero experto de élite. Responde en español con 3 puntos clave muy directos."
+      `ANALIZA PROFUNDAMENTE ESTA DATA FINANCIERA:\n${dataSummary}\n\nIdentifica patrones de fuga de capital, anomalías en gastos recurrentes y oportunidades de optimización agresiva.`,
+      "Eres un modelo de razonamiento financiero avanzado (estilo R1/DeepSeek). Tu objetivo es realizar un análisis deductivo impecable. No des consejos genéricos. Sé crítico, directo y detecta correlaciones entre fechas, categorías y montos. Responde en español con un tono profesional y analítico, usando 3-4 puntos clave altamente específicos."
     );
   } catch (error: any) {
     console.error("Advice Error:", error);
-    return "⚠️ El asistente está sincronizando datos. Por favor, intenta de nuevo en un minuto.";
+    return "⚠️ El motor de razonamiento está analizando otros flujos. Reintenta en breve.";
   }
 };
 
@@ -155,7 +155,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
   try {
     const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     const responseText = await runWithFallback(
-      `Clasifica: "${description}"`,
+      `Clasifica con precisión lógica: "${description}"`,
       `Responde exclusivamente en JSON con: category (debe ser una de [${allowedCategories.join(", ")}]), subCategory y confidence (0-1).`,
       true,
       {
@@ -181,7 +181,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
       };
     }
   } catch (e) {
-    console.warn("Nube lenta, usando motor local.");
+    console.warn("Usando motor local.");
   }
 
   return localAttempt;
@@ -193,24 +193,12 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
   let confidence = 0.1;
 
   if (!isIncome) {
-    if (desc.includes("moto") || desc.includes("refaccion") || desc.includes("repuesto") || desc.includes("mecanico") || desc.includes("taller") || desc.includes("aceite") || desc.includes("bujia") || desc.includes("llanta")) {
+    if (desc.includes("moto") || desc.includes("refaccion") || desc.includes("repuesto") || desc.includes("mecanico") || desc.includes("taller")) {
       category = "Vehículos y Mantenimiento";
       confidence = 1;
-    } else if (desc.includes("croqueta") || desc.includes("perro") || desc.includes("gato") || desc.includes("mascota") || desc.includes("veterinario")) {
+    } else if (desc.includes("croqueta") || desc.includes("perro") || desc.includes("gato") || desc.includes("veterinario")) {
       category = "Mascotas";
       confidence = 1;
-    } else if (desc.includes("regalo") || desc.includes("presente") || desc.includes("familiar") || desc.includes("cumple")) {
-      category = "Regalos y Donaciones";
-      confidence = 1;
-    } else if (desc.includes("renta") || desc.includes("luz") || desc.includes("agua") || desc.includes("hogar")) {
-      category = "Vivienda y Hogar";
-      confidence = 1;
-    } else if (desc.includes("uber") || desc.includes("taxi") || desc.includes("gasol")) {
-      category = "Transporte";
-      confidence = 0.9;
-    } else if (desc.includes("comida") || desc.includes("rest") || desc.includes("cafe")) {
-      category = "Comida y Bebida";
-      confidence = 0.9;
     }
   } else {
     if (desc.includes("sueldo") || desc.includes("nomina") || desc.includes("pago")) {
