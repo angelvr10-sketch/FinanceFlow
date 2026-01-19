@@ -26,9 +26,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   return (
     <div className="space-y-8 px-2">
       <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] px-6">Historial de Operaciones</h3>
-      <div className="space-y-5">
+      <div className="space-y-4">
         {visibleTransactions.map((t) => (
-          <div key={t.id} className="group bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:shadow-md transition-all duration-300 min-w-0">
+          <div key={t.id} className="group bg-white dark:bg-slate-900 p-5 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:shadow-md transition-all duration-300 min-w-0 overflow-hidden">
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <div className={`p-4 rounded-3xl shadow-lg flex-shrink-0 flex items-center justify-center ${t.type === TransactionType.INCOME ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600'}`}>
                 {t.icon && CategoryIcons[t.icon] ? (
@@ -39,12 +39,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                   </svg>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-black text-slate-800 dark:text-white text-base truncate tracking-tight mb-1" title={t.description}>
+              <div className="min-w-0 flex-1 pr-2">
+                <p className="font-black text-slate-800 dark:text-white text-base truncate tracking-tight break-all" title={t.description}>
                   {t.description}
                 </p>
-                <div className="flex gap-2 items-center">
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-slate-700 dark:text-slate-300 font-black uppercase tracking-tighter truncate max-w-[120px]">
+                <div className="flex gap-2 items-center mt-1">
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-slate-700 dark:text-slate-300 font-black uppercase tracking-tighter truncate max-w-[100px]">
                     {t.category}
                   </span>
                   <span className="text-[10px] text-slate-400 dark:text-slate-600 font-black whitespace-nowrap">
@@ -53,20 +53,16 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2 ml-4 flex-shrink-0">
+            <div className="flex flex-col items-end gap-1 ml-2 flex-shrink-0">
               <p className={`font-black text-xl tracking-tighter whitespace-nowrap ${t.type === TransactionType.INCOME ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {t.type === TransactionType.INCOME ? '+' : '-'}${t.amount.toLocaleString()}
               </p>
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                <button onClick={() => onEdit(t)} className="p-2 text-slate-400 hover:text-indigo-500 bg-slate-50 dark:bg-slate-800 rounded-xl transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
+                <button onClick={() => onEdit(t)} className="p-2 text-slate-400 hover:text-indigo-500 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                 </button>
-                <button onClick={() => onDelete(t.id)} className="p-2 text-slate-400 hover:text-rose-500 bg-slate-50 dark:bg-slate-800 rounded-xl transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                <button onClick={() => onDelete(t.id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
               </div>
             </div>
@@ -76,11 +72,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
         {visibleCount < sorted.length && (
           <button 
             onClick={() => setVisibleCount(prev => prev + 10)}
-            className="w-full py-6 flex flex-col items-center gap-2 group transition-all"
+            className="w-full py-8 flex flex-col items-center gap-2 group transition-all"
           >
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Ver siguientes 10</span>
-            <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Ver más movimientos</span>
+            <div className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-lg group-hover:bg-indigo-600 group-hover:text-white transition-all transform group-active:scale-90">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
               </svg>
             </div>

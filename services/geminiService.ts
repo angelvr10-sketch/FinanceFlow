@@ -65,11 +65,11 @@ const findBestCategoryMatch = (input: string, allowed: string[]): string | null 
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) return "⚠️ AI Desactivada: Configura tu API_KEY en el panel de Netlify/Vercel para recibir consejos.";
+  if (!apiKey) return "⚠️ AI Desactivada: Configura tu API_KEY para recibir consejos.";
   if (transactions.length === 0) return "Aún no tienes transacciones para analizar.";
 
   const ai = new GoogleGenAI({ apiKey });
-  const dataSummary = transactions.slice(0, 25).map(t => ({
+  const dataSummary = transactions.slice(0, 15).map(t => ({
     t: t.type === TransactionType.INCOME ? 'INGRESO' : 'GASTO',
     c: t.category,
     a: t.amount,
@@ -79,15 +79,16 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Analiza este historial y dame 3 consejos financieros breves: ${JSON.stringify(dataSummary)}`,
+      contents: `Analiza brevemente (3 puntos) este historial financiero y dame consejos útiles en español: ${JSON.stringify(dataSummary)}`,
       config: {
-        systemInstruction: "Eres un asesor financiero experto. Responde en español.",
-        temperature: 0.5,
+        systemInstruction: "Eres un asesor financiero experto y conciso.",
+        temperature: 0.7,
       }
     });
-    return response.text ?? "Continúa registrando para obtener análisis.";
+    return response.text || "No se pudo generar el análisis. Inténtalo más tarde.";
   } catch (error) {
-    return "Error al conectar con el asesor IA.";
+    console.error("Advice Error:", error);
+    return "Error temporal de conexión con el asesor financiero.";
   }
 };
 
@@ -95,20 +96,19 @@ export const categorizeTransaction = async (description: string, type: Transacti
   const apiKey = getApiKey();
   const isIncome = type === TransactionType.INCOME;
   
-  // PRIMERO: Intentar coincidencia local de alta prioridad (Hogar, Bebé, Préstamo)
+  // Reglas Locales de Alta Prioridad
   const localAttempt = localFallback(description, isIncome);
   if (localAttempt.confidence === 1) return localAttempt;
 
-  // SEGUNDO: Si hay API_KEY, usar Gemini
   if (apiKey) {
     const ai = new GoogleGenAI({ apiKey });
     const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Clasifica: "${description}" (Tipo: ${isIncome ? 'INGRESO' : 'GASTO'}). Categorías: [${allowedCategories.join(", ")}]. Responde JSON con: category, subCategory, confidence.`,
+        contents: `Clasifica esta descripción: "${description}". Categorías permitidas: [${allowedCategories.join(", ")}]. Responde solo JSON.`,
         config: {
-          systemInstruction: "Eres un experto contable. Prioriza categorías específicas como 'Bebé', 'Vivienda' o 'Financieros' antes que 'Otros'.",
+          systemInstruction: "Eres un contador experto. Prioriza categorías específicas como 'Bebé', 'Vivienda' o 'Financieros'.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -133,11 +133,10 @@ export const categorizeTransaction = async (description: string, type: Transacti
         };
       }
     } catch (e) {
-      console.warn("IA falló, usando fallback local...");
+      console.warn("AI Fallback a Local");
     }
   }
 
-  // TERCERO: Fallback final
   return localAttempt;
 };
 
@@ -147,28 +146,27 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
   let confidence = 0.1;
 
   if (!isIncome) {
-    // Coincidencias de alta precisión (Confidence 1)
-    if (desc.includes("hogar") || desc.includes("casa") || desc.includes("renta")) {
+    if (desc.includes("hogar") || desc.includes("casa") || desc.includes("renta") || desc.includes("mantenimiento")) {
       category = "Vivienda y Hogar";
       confidence = 1;
-    } else if (desc.includes("bebe") || desc.includes("leche") || desc.includes("pañal") || desc.includes("maternidad")) {
+    } else if (desc.includes("bebe") || desc.includes("leche") || desc.includes("pañal") || desc.includes("baby")) {
       category = "Bebé y Maternidad";
       confidence = 1;
-    } else if (desc.includes("prestamo") || desc.includes("banco") || desc.includes("credito") || desc.includes("financiero")) {
+    } else if (desc.includes("prestamo") || desc.includes("banco") || desc.includes("credito") || desc.includes("interes")) {
       category = "Gastos Financieros";
       confidence = 1;
-    } else if (desc.includes("gasol") || desc.includes("trans") || desc.includes("uber") || desc.includes("taxi")) {
-      category = "Transporte";
-      confidence = 0.9;
-    } else if (desc.includes("comida") || desc.includes("rest") || desc.includes("cena") || desc.includes("cafe")) {
+    } else if (desc.includes("comida") || desc.includes("cena") || desc.includes("cafe") || desc.includes("taco")) {
       category = "Comida y Bebida";
+      confidence = 0.9;
+    } else if (desc.includes("gasol") || desc.includes("uber") || desc.includes("taxi") || desc.includes("bus")) {
+      category = "Transporte";
       confidence = 0.9;
     }
   } else {
-    if (desc.includes("nomina") || desc.includes("sueldo") || desc.includes("pago")) {
+    if (desc.includes("nomina") || desc.includes("sueldo")) {
       category = "Sueldo y Salario";
       confidence = 1;
-    } else if (desc.includes("venta") || desc.includes("tinta") || desc.includes("pago cliente")) {
+    } else if (desc.includes("venta") || desc.includes("tinta")) {
       category = "Ventas y Negocios";
       confidence = 1;
     }
@@ -176,7 +174,7 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
 
   return {
     category,
-    subCategory: confidence === 1 ? "Clasificación Directa" : "Detección Inteligente",
+    subCategory: confidence === 1 ? "Detección Directa" : "Detección Inteligente",
     icon: ICON_MAP[category] || "other",
     confidence
   };
