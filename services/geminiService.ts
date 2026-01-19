@@ -4,13 +4,13 @@ import { Transaction, CategorizationResult, TransactionType } from "../types";
 
 const getApiKey = () => {
   try {
-    return process.env.API_KEY || '';
+    return (process.env.API_KEY || '').trim();
   } catch (e) {
     return '';
   }
 };
 
-const EXPENSE_CATEGORIES = [
+export const EXPENSE_CATEGORIES = [
   "Comida y Bebida", 
   "Transporte", 
   "Vivienda y Hogar", 
@@ -25,7 +25,7 @@ const EXPENSE_CATEGORIES = [
   "Otros Gastos"
 ];
 
-const INCOME_CATEGORIES = [
+export const INCOME_CATEGORIES = [
   "Sueldo y Salario", 
   "Ventas y Negocios", 
   "Honorarios Profesionales", 
@@ -34,7 +34,7 @@ const INCOME_CATEGORIES = [
   "Otros Ingresos"
 ];
 
-const ICON_MAP: Record<string, string> = {
+export const ICON_MAP: Record<string, string> = {
   "Comida y Bebida": "food",
   "Transporte": "transport",
   "Vivienda y Hogar": "home",
@@ -65,8 +65,8 @@ const findBestCategoryMatch = (input: string, allowed: string[]): string | null 
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) return "⚠️ AI Desactivada: Configura tu API_KEY para recibir consejos.";
-  if (transactions.length === 0) return "Aún no tienes transacciones para analizar.";
+  if (!apiKey) return "⚠️ Configuración: Falta la API_KEY en las variables de entorno.";
+  if (transactions.length === 0) return "Registra algunos movimientos para recibir consejos.";
 
   const ai = new GoogleGenAI({ apiKey });
   const dataSummary = transactions.slice(0, 15).map(t => ({
@@ -79,16 +79,15 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Analiza brevemente (3 puntos) este historial financiero y dame consejos útiles en español: ${JSON.stringify(dataSummary)}`,
+      contents: `Analiza este historial y da 3 consejos breves en español: ${JSON.stringify(dataSummary)}`,
       config: {
-        systemInstruction: "Eres un asesor financiero experto y conciso.",
+        systemInstruction: "Eres un asesor financiero experto. Responde con lenguaje natural y motivador.",
         temperature: 0.7,
       }
     });
-    return response.text || "No se pudo generar el análisis. Inténtalo más tarde.";
+    return response.text || "No se pudo generar el análisis.";
   } catch (error) {
-    console.error("Advice Error:", error);
-    return "Error temporal de conexión con el asesor financiero.";
+    return "⚠️ Error de conexión con el asesor financiero.";
   }
 };
 
@@ -96,7 +95,6 @@ export const categorizeTransaction = async (description: string, type: Transacti
   const apiKey = getApiKey();
   const isIncome = type === TransactionType.INCOME;
   
-  // Reglas Locales de Alta Prioridad
   const localAttempt = localFallback(description, isIncome);
   if (localAttempt.confidence === 1) return localAttempt;
 
@@ -106,9 +104,9 @@ export const categorizeTransaction = async (description: string, type: Transacti
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Clasifica esta descripción: "${description}". Categorías permitidas: [${allowedCategories.join(", ")}]. Responde solo JSON.`,
+        contents: `Clasifica: "${description}" (Tipo: ${isIncome ? 'INGRESO' : 'GASTO'}). Categorías permitidas: [${allowedCategories.join(", ")}]. Responde JSON.`,
         config: {
-          systemInstruction: "Eres un contador experto. Prioriza categorías específicas como 'Bebé', 'Vivienda' o 'Financieros'.",
+          systemInstruction: "Responde estrictamente en JSON con category (string), subCategory (string), confidence (number).",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -124,6 +122,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
 
       const result = JSON.parse(response.text || "{}");
       const matched = findBestCategoryMatch(result.category, allowedCategories);
+      
       if (matched) {
         return {
           category: matched,
@@ -133,7 +132,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
         };
       }
     } catch (e) {
-      console.warn("AI Fallback a Local");
+      console.warn("IA falló, usando local.");
     }
   }
 
@@ -146,19 +145,22 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
   let confidence = 0.1;
 
   if (!isIncome) {
-    if (desc.includes("hogar") || desc.includes("casa") || desc.includes("renta") || desc.includes("mantenimiento")) {
+    if (desc.includes("paracetamol") || desc.includes("medica") || desc.includes("doctor") || desc.includes("farmacia") || desc.includes("pastilla") || desc.includes("salud")) {
+      category = "Salud y Bienestar";
+      confidence = 1;
+    } else if (desc.includes("hogar") || desc.includes("casa") || desc.includes("renta") || desc.includes("luz") || desc.includes("agua")) {
       category = "Vivienda y Hogar";
       confidence = 1;
-    } else if (desc.includes("bebe") || desc.includes("leche") || desc.includes("pañal") || desc.includes("baby")) {
+    } else if (desc.includes("bebe") || desc.includes("pañal") || desc.includes("baby")) {
       category = "Bebé y Maternidad";
       confidence = 1;
-    } else if (desc.includes("prestamo") || desc.includes("banco") || desc.includes("credito") || desc.includes("interes")) {
+    } else if (desc.includes("prestamo") || desc.includes("banco") || desc.includes("credito")) {
       category = "Gastos Financieros";
       confidence = 1;
-    } else if (desc.includes("comida") || desc.includes("cena") || desc.includes("cafe") || desc.includes("taco")) {
+    } else if (desc.includes("comida") || desc.includes("rest") || desc.includes("cafe")) {
       category = "Comida y Bebida";
       confidence = 0.9;
-    } else if (desc.includes("gasol") || desc.includes("uber") || desc.includes("taxi") || desc.includes("bus")) {
+    } else if (desc.includes("uber") || desc.includes("taxi") || desc.includes("bus")) {
       category = "Transporte";
       confidence = 0.9;
     }
@@ -166,15 +168,12 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
     if (desc.includes("nomina") || desc.includes("sueldo")) {
       category = "Sueldo y Salario";
       confidence = 1;
-    } else if (desc.includes("venta") || desc.includes("tinta")) {
-      category = "Ventas y Negocios";
-      confidence = 1;
     }
   }
 
   return {
     category,
-    subCategory: confidence === 1 ? "Detección Directa" : "Detección Inteligente",
+    subCategory: confidence === 1 ? "Detección Instantánea" : "Detección Sugerida",
     icon: ICON_MAP[category] || "other",
     confidence
   };
