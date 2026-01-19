@@ -155,13 +155,75 @@ const App: React.FC = () => {
     reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
+        setIsSyncing(true);
+
+        // 1. Actualizar estado local
         if (data.accounts) setAccounts(sortAccounts(data.accounts));
         if (data.transactions) setTransactions(data.transactions);
         if (data.templates) setTemplates(data.templates);
+
+        // 2. Si hay sesión, sincronizar con la nube
+        if (supabase && session) {
+          const userId = session.user.id;
+          
+          // Sincronizar Cuentas
+          if (data.accounts?.length > 0) {
+            await supabase.from('accounts').upsert(
+              data.accounts.map((a: any) => ({
+                id: a.id,
+                user_id: userId,
+                name: a.name,
+                type: a.type,
+                color: a.color
+              }))
+            );
+          }
+
+          // Sincronizar Plantillas
+          if (data.templates?.length > 0) {
+            await supabase.from('templates').upsert(
+              data.templates.map((t: any) => ({
+                id: t.id,
+                user_id: userId,
+                name: t.name,
+                account_id: t.accountId,
+                amount: t.amount,
+                description: t.description,
+                category: t.category,
+                type: t.type,
+                icon: t.icon
+              }))
+            );
+          }
+
+          // Sincronizar Transacciones
+          if (data.transactions?.length > 0) {
+            // Usamos un pequeño delay para asegurar que las cuentas ya existan (por las FK)
+            await new Promise(r => setTimeout(r, 500));
+            await supabase.from('transactions').upsert(
+              data.transactions.map((t: any) => ({
+                id: t.id,
+                user_id: userId,
+                account_id: t.accountId,
+                amount: t.amount,
+                description: t.description,
+                category: t.category,
+                sub_category: t.subCategory || null,
+                type: t.type,
+                date: t.date,
+                icon: t.icon
+              }))
+            );
+          }
+        }
+
         setIsSettingsOpen(false);
-        alert("¡Datos restaurados con éxito!");
+        setIsSyncing(false);
+        alert("¡Datos restaurados y sincronizados con la nube con éxito!");
       } catch (err) {
-        alert("Error al procesar el archivo.");
+        console.error("Import error:", err);
+        setIsSyncing(false);
+        alert("Error al procesar el archivo o sincronizar con la nube.");
       }
     };
     reader.readAsText(file);
@@ -294,7 +356,7 @@ const App: React.FC = () => {
           </button>
           <button onClick={() => setCurrentView('reports')} className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${currentView === 'reports' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400'}`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </button>
           <button onClick={() => setIsSettingsOpen(true)} className="w-14 h-14 flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all">
