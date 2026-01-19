@@ -12,6 +12,12 @@ export const CategoryIcons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
     </svg>
   ),
+  maintenance: (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 19l-3-3m0 0l-3 3m3-3V11" />
+    </svg>
+  ),
   leisure: (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -80,6 +86,7 @@ export const CategoryIcons: Record<string, React.ReactNode> = {
 
 export const getDefaultIcon = (category: string): string => {
   const cat = category.toLowerCase();
+  if (cat.includes('mantenimiento') || cat.includes('vehículo') || cat.includes('moto') || cat.includes('refacción')) return 'maintenance';
   if (cat.includes('mascota') || cat.includes('perro') || cat.includes('gato')) return 'pets';
   if (cat.includes('regalo') || cat.includes('donación')) return 'gifts';
   if (cat.includes('comida') || cat.includes('restaurante') || cat.includes('supermercado')) return 'food';

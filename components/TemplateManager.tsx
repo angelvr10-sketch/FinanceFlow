@@ -13,6 +13,7 @@ interface TemplateManagerProps {
 const CATEGORIES = [
   "Comida y Bebida", 
   "Transporte", 
+  "Vehículos y Mantenimiento",
   "Vivienda y Hogar", 
   "Mascotas",
   "Regalos y Donaciones",
@@ -55,7 +56,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ templates, acc
       type,
       accountId,
       category,
-      icon: type === TransactionType.INCOME ? (category.includes('Regalo') ? 'gifts' : 'salary') : (category === 'Mascotas' ? 'pets' : (category.includes('Regalo') ? 'gifts' : 'shopping'))
+      icon: type === TransactionType.INCOME ? (category.includes('Regalo') ? 'gifts' : 'salary') : (category === 'Mascotas' ? 'pets' : (category.includes('Regalo') ? 'gifts' : (category.includes('Vehículo') ? 'maintenance' : 'shopping')))
     });
 
     setName('');
