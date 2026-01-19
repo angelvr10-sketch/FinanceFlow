@@ -2,9 +2,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
-// Tipos de modelos para la cascada
-const PRIMARY_MODEL = 'gemini-3-flash-preview';
-const FALLBACK_MODEL = 'gemini-2.5-flash-lite-latest';
+// Priorizamos la serie 2.5 por su alta disponibilidad y baja latencia
+const PRIMARY_MODEL = 'gemini-2.5-flash-lite-latest';
+const FALLBACK_MODEL = 'gemini-2.5-flash-preview';
 
 const getApiKey = () => {
   try {
@@ -18,6 +18,8 @@ export const EXPENSE_CATEGORIES = [
   "Comida y Bebida", 
   "Transporte", 
   "Vivienda y Hogar", 
+  "Mascotas",
+  "Regalos y Donaciones",
   "Ocio y Entretenimiento", 
   "Salud y Bienestar", 
   "Educación", 
@@ -42,6 +44,8 @@ export const ICON_MAP: Record<string, string> = {
   "Comida y Bebida": "food",
   "Transporte": "transport",
   "Vivienda y Hogar": "home",
+  "Mascotas": "pets",
+  "Regalos y Donaciones": "gifts",
   "Ocio y Entretenimiento": "leisure",
   "Salud y Bienestar": "health",
   "Educación": "education",
@@ -54,7 +58,7 @@ export const ICON_MAP: Record<string, string> = {
   "Ventas y Negocios": "business",
   "Honorarios Profesionales": "professional",
   "Inversiones y Dividendos": "investment",
-  "Regalos y Premios": "other",
+  "Regalos y Premios": "gifts",
   "Otros Ingresos": "other",
   "Otros Gastos": "other"
 };
@@ -69,9 +73,6 @@ const findBestCategoryMatch = (input: string, allowed: string[]): string | null 
   return allowed.find(cat => normalizedInput.includes(cat.toLowerCase()) || cat.toLowerCase().includes(normalizedInput)) || null;
 };
 
-/**
- * Lógica de ejecución con reintentos y fallback de modelos
- */
 async function runWithFallback(
   prompt: string, 
   systemInstruction: string, 
@@ -82,6 +83,7 @@ async function runWithFallback(
   if (!apiKey) throw new Error("NO_API_KEY");
 
   const ai = new GoogleGenAI({ apiKey });
+  // Usamos siempre la serie 2.5 para evitar saturación
   const modelsToTry = [PRIMARY_MODEL, FALLBACK_MODEL];
   
   let lastError = null;
@@ -93,7 +95,7 @@ async function runWithFallback(
         contents: prompt,
         config: {
           systemInstruction,
-          temperature: 0.4, // Menor temperatura = más estabilidad
+          temperature: 0.2, // Temperatura baja para respuestas ultra-rápidas y precisas
           ...(isJson && { 
             responseMimeType: "application/json",
             responseSchema: schema 
@@ -105,24 +107,19 @@ async function runWithFallback(
     } catch (error: any) {
       lastError = error;
       const isSaturated = error?.message?.includes('429') || error?.message?.includes('quota');
-      
       if (isSaturated && modelName === PRIMARY_MODEL) {
-        console.warn(`Modelo ${modelName} saturado, probando fallback ${FALLBACK_MODEL}...`);
-        await wait(300); // Pequeña espera antes de saltar al siguiente
+        await wait(200);
         continue;
       }
-      
       throw error;
     }
   }
-
   throw lastError;
 }
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
   if (transactions.length === 0) return "Registra movimientos para recibir consejos.";
-
-  const dataSummary = transactions.slice(0, 15).map(t => ({
+  const dataSummary = transactions.slice(0, 20).map(t => ({
     t: t.type === TransactionType.INCOME ? 'I' : 'G',
     c: t.category,
     a: t.amount,
@@ -131,12 +128,11 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
 
   try {
     return await runWithFallback(
-      `Analiza y da 3 consejos cortos: ${JSON.stringify(dataSummary)}`,
-      "Eres un asesor financiero experto. Responde breve y directo en español."
+      `Analiza y da 3 tips: ${JSON.stringify(dataSummary)}`,
+      "Eres un asesor financiero que usa Gemini 2.5. Responde de forma brillante y breve en español."
     );
   } catch (error: any) {
-    if (error?.message?.includes('429')) return "⚠️ El servidor de IA está saturado por ahora. Reintenta en unos minutos.";
-    return "⚠️ Servicio de IA temporalmente no disponible.";
+    return "⚠️ El asesor está descansando. Intenta de nuevo en un momento.";
   }
 };
 
@@ -144,14 +140,13 @@ export const categorizeTransaction = async (description: string, type: Transacti
   const isIncome = type === TransactionType.INCOME;
   const localAttempt = localFallback(description, isIncome);
   
-  // Si lo detectamos localmente con total seguridad, ni siquiera llamamos a la nube para ahorrar cuota
   if (localAttempt.confidence === 1) return localAttempt;
 
   try {
     const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     const responseText = await runWithFallback(
       `Clasifica: "${description}"`,
-      `Categorías: [${allowedCategories.join(", ")}]. Responde JSON con category, subCategory, confidence.`,
+      `Responde JSON con category (de [${allowedCategories.join(", ")}]), subCategory y confidence (0-1).`,
       true,
       {
         type: Type.OBJECT,
@@ -176,7 +171,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
       };
     }
   } catch (e) {
-    console.warn("Fallo total de nube, usando motor local.");
+    console.warn("Usando motor local por seguridad.");
   }
 
   return localAttempt;
@@ -188,27 +183,31 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
   let confidence = 0.1;
 
   if (!isIncome) {
-    if (desc.includes("paracetamol") || desc.includes("medica") || desc.includes("doctor") || desc.includes("farmacia") || desc.includes("pastilla") || desc.includes("salud") || desc.includes("dentista")) {
+    // REGLAS LOCALES ACTUALIZADAS Y ROBUSTAS
+    if (desc.includes("croqueta") || desc.includes("perro") || desc.includes("gato") || desc.includes("mascota") || desc.includes("veterinario") || desc.includes("purina") || desc.includes("whiskas") || desc.includes("arena para") || desc.includes("dog") || desc.includes("cat")) {
+      category = "Mascotas";
+      confidence = 1;
+    } else if (desc.includes("regalo") || desc.includes("presente") || desc.includes("cumple") || desc.includes("donacion") || desc.includes("boda") || desc.includes("aniversario") || desc.includes("gift")) {
+      category = "Regalos y Donaciones";
+      confidence = 1;
+    } else if (desc.includes("paracetamol") || desc.includes("medica") || desc.includes("doctor") || desc.includes("farmacia") || desc.includes("pastilla") || desc.includes("salud") || desc.includes("clinica")) {
       category = "Salud y Bienestar";
       confidence = 1;
-    } else if (desc.includes("hogar") || desc.includes("casa") || desc.includes("renta") || desc.includes("luz") || desc.includes("agua") || desc.includes("gas")) {
+    } else if (desc.includes("hogar") || desc.includes("casa") || desc.includes("renta") || desc.includes("luz") || desc.includes("agua") || desc.includes("alquiler")) {
       category = "Vivienda y Hogar";
       confidence = 1;
-    } else if (desc.includes("bebe") || desc.includes("pañal") || desc.includes("baby") || desc.includes("leche formula")) {
-      category = "Bebé y Maternidad";
-      confidence = 1;
-    } else if (desc.includes("prestamo") || desc.includes("banco") || desc.includes("credito") || desc.includes("interes")) {
-      category = "Gastos Financieros";
-      confidence = 1;
-    } else if (desc.includes("comida") || desc.includes("rest") || desc.includes("cafe") || desc.includes("almuerzo") || desc.includes("cena")) {
+    } else if (desc.includes("comida") || desc.includes("rest") || desc.includes("cafe") || desc.includes("taco") || desc.includes("cena") || desc.includes("almuerzo")) {
       category = "Comida y Bebida";
       confidence = 0.9;
-    } else if (desc.includes("uber") || desc.includes("taxi") || desc.includes("bus") || desc.includes("gasol") || desc.includes("parking")) {
+    } else if (desc.includes("uber") || desc.includes("taxi") || desc.includes("bus") || desc.includes("gasol") || desc.includes("nafta")) {
       category = "Transporte";
       confidence = 0.9;
     }
   } else {
-    if (desc.includes("nomina") || desc.includes("sueldo") || desc.includes("salario")) {
+    if (desc.includes("regalo") || desc.includes("premio") || desc.includes("donativo") || desc.includes("suerte")) {
+      category = "Regalos y Premios";
+      confidence = 1;
+    } else if (desc.includes("nomina") || desc.includes("sueldo") || desc.includes("salario") || desc.includes("pago empresa")) {
       category = "Sueldo y Salario";
       confidence = 1;
     }

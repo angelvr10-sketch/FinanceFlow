@@ -27,6 +27,20 @@ export const CategoryIcons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
     </svg>
   ),
+  pets: (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 2a2 2 0 00-2 2v1h-1a2 2 0 00-2 2v1h-1a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2v-8a2 2 0 00-2-2h-1V5a2 2 0 00-2-2h-1V3a2 2 0 00-2-2h-1zM7 9h10v8H7V9z" />
+      <circle cx="9" cy="12" r="1" fill="currentColor" />
+      <circle cx="15" cy="12" r="1" fill="currentColor" />
+      <path d="M12 15a2 2 0 01-2-2h4a2 2 0 01-2 2z" fill="currentColor" />
+    </svg>
+  ),
+  gifts: (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12v10H4V12M2 7h20v5H2V7zm10-5c0 2-2 2-2 5h4c0-3-2-3-2-5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 7v15" />
+    </svg>
+  ),
   education: (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.246 0-2.832.477-4 1.253" />
@@ -66,16 +80,17 @@ export const CategoryIcons: Record<string, React.ReactNode> = {
 
 export const getDefaultIcon = (category: string): string => {
   const cat = category.toLowerCase();
+  if (cat.includes('mascota') || cat.includes('perro') || cat.includes('gato')) return 'pets';
+  if (cat.includes('regalo') || cat.includes('donación')) return 'gifts';
   if (cat.includes('comida') || cat.includes('restaurante') || cat.includes('supermercado')) return 'food';
   if (cat.includes('transporte') || cat.includes('uber') || cat.includes('gasolina') || cat.includes('viaje')) return 'transport';
   if (cat.includes('ocio') || cat.includes('cine') || cat.includes('entretenimiento')) return 'leisure';
   if (cat.includes('hogar') || cat.includes('renta') || cat.includes('luz')) return 'home';
-  if (cat.includes('salud') || cat.includes('farmacia') || cat.includes('doctor') || cat.includes('bebe')) return 'health';
+  if (cat.includes('salud') || cat.includes('farmacia') || cat.includes('doctor')) return 'health';
   if (cat.includes('educación') || cat.includes('curso') || cat.includes('libro')) return 'education';
   if (cat.includes('sueldo') || cat.includes('nomina')) return 'salary';
   if (cat.includes('venta') || cat.includes('negocio')) return 'business';
-  if (cat.includes('honorarios') || cat.includes('soporte') || cat.includes('servicio')) return 'professional';
+  if (cat.includes('honorarios')) return 'professional';
   if (cat.includes('inversión') || cat.includes('ahorro') || cat.includes('financiero') || cat.includes('prestamo')) return 'investment';
-  if (cat.includes('otros')) return 'other';
   return 'shopping';
 };
