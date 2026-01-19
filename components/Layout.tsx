@@ -24,7 +24,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </h1>
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isAIActive ? 'bg-indigo-400/30 text-indigo-100 border border-white/10' : 'bg-amber-500/20 text-amber-200 animate-pulse'}`}>
               <div className={`w-1.5 h-1.5 rounded-full ${isAIActive ? 'bg-white shadow-[0_0_8px_white]' : 'bg-amber-400'}`}></div>
-              {isAIActive ? 'IA 2.5 Activa' : 'IA Offline'}
+              {isAIActive ? 'IA Gemini 3 Activa' : 'IA Offline'}
             </div>
           </div>
           <p className="text-indigo-100 dark:text-slate-400 text-xs font-bold mt-2 uppercase tracking-[0.3em] opacity-80">

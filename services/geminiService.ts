@@ -3,11 +3,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
 /** 
- * Nombres técnicos exactos para la serie 2.5 
- * Usamos las versiones con fecha para máxima estabilidad
+ * Utilizamos la serie Gemini 3 para máxima estabilidad y potencia
  */
-const PRIMARY_MODEL = 'gemini-2.5-flash-lite-preview-02-2025';
-const FALLBACK_MODEL = 'gemini-2.5-flash-preview-01-2025';
+const PRIMARY_MODEL = 'gemini-3-flash-preview';
+const FALLBACK_MODEL = 'gemini-3-pro-preview';
 
 const getApiKey = () => {
   try {
@@ -85,7 +84,7 @@ async function runWithFallback(
   schema?: any
 ): Promise<string> {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("Falta la API_KEY en el entorno.");
+  if (!apiKey) throw new Error("API_KEY_MISSING");
 
   const ai = new GoogleGenAI({ apiKey });
   const modelsToTry = [PRIMARY_MODEL, FALLBACK_MODEL];
@@ -99,7 +98,7 @@ async function runWithFallback(
         contents: prompt,
         config: {
           systemInstruction,
-          temperature: 0.1, // Mínima creatividad para máxima velocidad
+          temperature: 0.2,
           ...(isJson && { 
             responseMimeType: "application/json",
             responseSchema: schema 
@@ -112,12 +111,14 @@ async function runWithFallback(
       lastError = error;
       const errorMsg = error?.message || "";
       
+      // Retry logic for quota
       if ((errorMsg.includes('429') || errorMsg.includes('quota')) && modelName === PRIMARY_MODEL) {
-        await wait(200);
+        await wait(300);
         continue;
       }
       
-      if (errorMsg.includes('404') && modelName === PRIMARY_MODEL) {
+      // If model not found, try the next one
+      if (errorMsg.includes('404')) {
         continue;
       }
 
@@ -128,22 +129,20 @@ async function runWithFallback(
 }
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
-  if (transactions.length === 0) return "Registra movimientos para recibir consejos.";
+  if (transactions.length < 5) return "Registra al menos 5 movimientos para recibir consejos personalizados.";
   
   const dataSummary = transactions.slice(0, 15).map(t => 
-    `${t.type === TransactionType.INCOME ? '+' : '-'}${t.amount} (${t.category}: ${t.description})`
-  ).join(' | ');
+    `${t.type === TransactionType.INCOME ? 'INGRESO' : 'GASTO'}: ${t.amount} (${t.category} - ${t.description})`
+  ).join('\n');
 
   try {
     return await runWithFallback(
-      `Analiza estos movimientos y da 3 consejos cortos: ${dataSummary}`,
-      "Eres un consultor financiero experto que usa Gemini 2.5. Responde con 3 viñetas breves y directas."
+      `Analiza estos movimientos y proporciona 3 consejos financieros accionables y breves:\n${dataSummary}`,
+      "Eres un consultor financiero experto de élite. Responde en español con 3 puntos clave muy directos."
     );
   } catch (error: any) {
-    const msg = error?.message || "";
-    if (msg.includes("429")) return "⚠️ Cuota excedida. Reintentando con Gemini 2.5...";
-    if (msg.includes("404")) return "⚠️ Error: Modelo Gemini 2.5 no encontrado. Verifica configuración.";
-    return `⚠️ Error de IA: El asesor financiero está teniendo problemas técnicos.`;
+    console.error("Advice Error:", error);
+    return "⚠️ El asistente está sincronizando datos. Por favor, intenta de nuevo en un minuto.";
   }
 };
 
@@ -157,7 +156,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
     const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     const responseText = await runWithFallback(
       `Clasifica: "${description}"`,
-      `Responde JSON con category (de [${allowedCategories.join(", ")}]), subCategory y confidence (0-1).`,
+      `Responde exclusivamente en JSON con: category (debe ser una de [${allowedCategories.join(", ")}]), subCategory y confidence (0-1).`,
       true,
       {
         type: Type.OBJECT,
@@ -182,7 +181,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
       };
     }
   } catch (e) {
-    console.warn("Error en categorización nube, usando local.");
+    console.warn("Nube lenta, usando motor local.");
   }
 
   return localAttempt;
@@ -194,23 +193,19 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
   let confidence = 0.1;
 
   if (!isIncome) {
-    // REGLAS LOCALES ACTUALIZADAS
-    if (desc.includes("moto") || desc.includes("refaccion") || desc.includes("repuesto") || desc.includes("mecanico") || desc.includes("taller") || desc.includes("aceite") || desc.includes("llanta") || desc.includes("bujia") || desc.includes("freno") || desc.includes("balata")) {
+    if (desc.includes("moto") || desc.includes("refaccion") || desc.includes("repuesto") || desc.includes("mecanico") || desc.includes("taller") || desc.includes("aceite") || desc.includes("bujia") || desc.includes("llanta")) {
       category = "Vehículos y Mantenimiento";
       confidence = 1;
     } else if (desc.includes("croqueta") || desc.includes("perro") || desc.includes("gato") || desc.includes("mascota") || desc.includes("veterinario")) {
       category = "Mascotas";
       confidence = 1;
-    } else if (desc.includes("regalo") || desc.includes("presente") || desc.includes("cumple") || desc.includes("donacion") || desc.includes("boda") || desc.includes("familiar")) {
+    } else if (desc.includes("regalo") || desc.includes("presente") || desc.includes("familiar") || desc.includes("cumple")) {
       category = "Regalos y Donaciones";
       confidence = 1;
-    } else if (desc.includes("medica") || desc.includes("doctor") || desc.includes("farmacia") || desc.includes("salud")) {
-      category = "Salud y Bienestar";
-      confidence = 1;
-    } else if (desc.includes("luz") || desc.includes("agua") || desc.includes("gas") || desc.includes("renta") || desc.includes("casa")) {
+    } else if (desc.includes("renta") || desc.includes("luz") || desc.includes("agua") || desc.includes("hogar")) {
       category = "Vivienda y Hogar";
       confidence = 1;
-    } else if (desc.includes("uber") || desc.includes("taxi") || desc.includes("bus") || desc.includes("gasol")) {
+    } else if (desc.includes("uber") || desc.includes("taxi") || desc.includes("gasol")) {
       category = "Transporte";
       confidence = 0.9;
     } else if (desc.includes("comida") || desc.includes("rest") || desc.includes("cafe")) {
@@ -218,10 +213,7 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
       confidence = 0.9;
     }
   } else {
-    if (desc.includes("regalo") || desc.includes("premio") || desc.includes("donativo")) {
-      category = "Regalos y Premios";
-      confidence = 1;
-    } else if (desc.includes("nomina") || desc.includes("sueldo") || desc.includes("salario")) {
+    if (desc.includes("sueldo") || desc.includes("nomina") || desc.includes("pago")) {
       category = "Sueldo y Salario";
       confidence = 1;
     }
@@ -229,7 +221,7 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
 
   return {
     category,
-    subCategory: confidence === 1 ? "Motor Local (Instantáneo)" : "Detección Sugerida",
+    subCategory: confidence === 1 ? "Motor Local" : "Sugerido",
     icon: ICON_MAP[category] || "other",
     confidence
   };
