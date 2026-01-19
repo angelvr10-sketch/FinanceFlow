@@ -2,11 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
-/** 
- * Utilizamos Gemini 3 Pro con capacidades de razonamiento profundo (Thinking)
- */
 const PRIMARY_MODEL = 'gemini-3-pro-preview';
-const FALLBACK_MODEL = 'gemini-3-flash-preview';
+const FLASH_MODEL = 'gemini-3-flash-preview';
 
 const getApiKey = () => {
   try {
@@ -81,67 +78,94 @@ async function runWithFallback(
   prompt: string, 
   systemInstruction: string, 
   isJson: boolean = false,
-  schema?: any
+  schema?: any,
+  imageData?: { data: string, mimeType: string }
 ): Promise<string> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API_KEY_MISSING");
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelsToTry = [PRIMARY_MODEL, FALLBACK_MODEL];
+  // Para visión preferimos Flash por su velocidad, para razonamiento preferimos Pro.
+  const modelName = imageData ? FLASH_MODEL : PRIMARY_MODEL;
   
-  let lastError: any = null;
+  try {
+    const isPro = modelName.includes('pro');
+    const contents: any = imageData 
+      ? { parts: [{ inlineData: imageData }, { text: prompt }] }
+      : prompt;
 
-  for (const modelName of modelsToTry) {
-    try {
-      const isPro = modelName.includes('pro');
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-          systemInstruction,
-          temperature: isPro ? 0.7 : 0.2, // Un poco más de creatividad para el Pro
-          // Activamos el presupuesto de pensamiento (Thinking Budget) para el modelo Pro
-          ...(isPro && { 
-            thinkingConfig: { thinkingBudget: 16000 } 
-          }),
-          ...(isJson && { 
-            responseMimeType: "application/json",
-            responseSchema: schema 
-          })
-        }
-      });
-
-      if (response.text) return response.text;
-    } catch (error: any) {
-      lastError = error;
-      const errorMsg = error?.message || "";
-      
-      if ((errorMsg.includes('429') || errorMsg.includes('quota')) && modelName === PRIMARY_MODEL) {
-        await wait(500);
-        continue;
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: contents,
+      config: {
+        systemInstruction,
+        temperature: isPro ? 0.7 : 0.2,
+        ...(isPro && !imageData && { thinkingConfig: { thinkingBudget: 16000 } }),
+        ...(isJson && { 
+          responseMimeType: "application/json",
+          responseSchema: schema 
+        })
       }
-      
-      if (errorMsg.includes('404')) continue;
-      throw error;
-    }
+    });
+
+    return response.text || "";
+  } catch (error: any) {
+    console.error("AI Error:", error);
+    throw error;
   }
-  throw lastError;
 }
+
+/**
+ * Analiza una imagen de un ticket para extraer datos financieros
+ */
+export const analyzeReceipt = async (base64Data: string, mimeType: string): Promise<any> => {
+  try {
+    const responseText = await runWithFallback(
+      "Analiza este ticket y extrae la información solicitada en formato JSON.",
+      "Eres un experto en contabilidad. Extrae del ticket: 1. amount (el total final como número), 2. merchant (nombre del establecimiento), 3. date (fecha en formato YYYY-MM-DD, si no hay usa hoy), 4. category (una de las permitidas).",
+      true,
+      {
+        type: Type.OBJECT,
+        properties: {
+          amount: { type: Type.NUMBER },
+          merchant: { type: Type.STRING },
+          date: { type: Type.STRING },
+          category: { type: Type.STRING },
+          confidence: { type: Type.NUMBER }
+        },
+        required: ["amount", "merchant", "category"]
+      },
+      { data: base64Data, mimeType }
+    );
+
+    const result = JSON.parse(responseText);
+    const matchedCategory = findBestCategoryMatch(result.category, EXPENSE_CATEGORIES) || "Otros Gastos";
+    
+    return {
+      amount: result.amount || 0,
+      description: result.merchant || "Compra",
+      date: result.date || new Date().toISOString().split('T')[0],
+      category: matchedCategory,
+      icon: ICON_MAP[matchedCategory] || "shopping"
+    };
+  } catch (error) {
+    console.error("Receipt analysis failed:", error);
+    throw error;
+  }
+};
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
   if (transactions.length < 5) return "Registra al menos 5 movimientos para recibir consejos personalizados.";
-  
   const dataSummary = transactions.slice(0, 30).map(t => 
     `${t.date} | ${t.type === TransactionType.INCOME ? 'INGRESO' : 'GASTO'}: $${t.amount} | Cat: ${t.category} | Desc: ${t.description}`
   ).join('\n');
 
   try {
     return await runWithFallback(
-      `ANALIZA PROFUNDAMENTE ESTA DATA FINANCIERA:\n${dataSummary}\n\nIdentifica patrones de fuga de capital, anomalías en gastos recurrentes y oportunidades de optimización agresiva.`,
-      "Eres un modelo de razonamiento financiero avanzado (estilo R1/DeepSeek). Tu objetivo es realizar un análisis deductivo impecable. No des consejos genéricos. Sé crítico, directo y detecta correlaciones entre fechas, categorías y montos. Responde en español con un tono profesional y analítico, usando 3-4 puntos clave altamente específicos."
+      `ANALIZA PROFUNDAMENTE ESTA DATA FINANCIERA:\n${dataSummary}\n\nIdentifica patrones de fuga de capital y oportunidades de optimización.`,
+      "Eres un modelo de razonamiento financiero avanzado. Sé crítico, directo y detecta correlaciones entre categorías y montos. Responde en español con 3-4 puntos clave."
     );
   } catch (error: any) {
-    console.error("Advice Error:", error);
     return "⚠️ El motor de razonamiento está analizando otros flujos. Reintenta en breve.";
   }
 };
@@ -149,14 +173,13 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
 export const categorizeTransaction = async (description: string, type: TransactionType): Promise<CategorizationResult> => {
   const isIncome = type === TransactionType.INCOME;
   const localAttempt = localFallback(description, isIncome);
-  
   if (localAttempt.confidence === 1) return localAttempt;
 
   try {
     const allowedCategories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     const responseText = await runWithFallback(
-      `Clasifica con precisión lógica: "${description}"`,
-      `Responde exclusivamente en JSON con: category (debe ser una de [${allowedCategories.join(", ")}]), subCategory y confidence (0-1).`,
+      `Clasifica: "${description}"`,
+      `Responde en JSON con: category (una de [${allowedCategories.join(", ")}]), subCategory y confidence (0-1).`,
       true,
       {
         type: Type.OBJECT,
@@ -171,7 +194,6 @@ export const categorizeTransaction = async (description: string, type: Transacti
 
     const result = JSON.parse(responseText);
     const matched = findBestCategoryMatch(result.category, allowedCategories);
-    
     if (matched) {
       return {
         category: matched,
@@ -180,10 +202,7 @@ export const categorizeTransaction = async (description: string, type: Transacti
         confidence: result.confidence || 0.8,
       };
     }
-  } catch (e) {
-    console.warn("Usando motor local.");
-  }
-
+  } catch (e) {}
   return localAttempt;
 };
 
@@ -191,26 +210,11 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
   const desc = description.toLowerCase().trim();
   let category = isIncome ? "Otros Ingresos" : "Otros Gastos";
   let confidence = 0.1;
-
   if (!isIncome) {
-    if (desc.includes("moto") || desc.includes("refaccion") || desc.includes("repuesto") || desc.includes("mecanico") || desc.includes("taller")) {
-      category = "Vehículos y Mantenimiento";
-      confidence = 1;
-    } else if (desc.includes("croqueta") || desc.includes("perro") || desc.includes("gato") || desc.includes("veterinario")) {
-      category = "Mascotas";
-      confidence = 1;
-    }
+    if (desc.includes("moto") || desc.includes("taller")) { category = "Vehículos y Mantenimiento"; confidence = 1; }
+    else if (desc.includes("perro") || desc.includes("gato")) { category = "Mascotas"; confidence = 1; }
   } else {
-    if (desc.includes("sueldo") || desc.includes("nomina") || desc.includes("pago")) {
-      category = "Sueldo y Salario";
-      confidence = 1;
-    }
+    if (desc.includes("sueldo") || desc.includes("nomina")) { category = "Sueldo y Salario"; confidence = 1; }
   }
-
-  return {
-    category,
-    subCategory: confidence === 1 ? "Motor Local" : "Sugerido",
-    icon: ICON_MAP[category] || "other",
-    confidence
-  };
+  return { category, subCategory: confidence === 1 ? "Motor Local" : "Sugerido", icon: ICON_MAP[category] || "other", confidence };
 }

@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction, TransactionType, Account, TransactionTemplate } from '../types';
-import { categorizeTransaction, EXPENSE_CATEGORIES, INCOME_CATEGORIES, ICON_MAP } from '../services/geminiService';
+import { categorizeTransaction, analyzeReceipt, EXPENSE_CATEGORIES, INCOME_CATEGORIES, ICON_MAP } from '../services/geminiService';
 import { CategoryIcons } from './Icons';
 
 interface TransactionFormProps {
@@ -13,6 +13,7 @@ interface TransactionFormProps {
 }
 
 export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, templates, initialData, onAdd, onClose }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState(initialData ? initialData.amount.toString() : '');
   const [description, setDescription] = useState(initialData ? initialData.description : '');
   const [date, setDate] = useState(initialData ? initialData.date.split('T')[0] : new Date().toISOString().split('T')[0]);
@@ -24,16 +25,16 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
   const [icon, setIcon] = useState(initialData?.icon || "shopping");
   
   const [isCategorizing, setIsCategorizing] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [aiStatus, setAiStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
 
   const availableCategories = useMemo(() => 
     type === TransactionType.EXPENSE ? EXPENSE_CATEGORIES : INCOME_CATEGORIES
   , [type]);
 
-  // Efecto para intentar categorizar al terminar de escribir la descripción
   useEffect(() => {
     const timer = setTimeout(async () => {
-      if (description.length > 3 && !initialData) {
+      if (description.length > 3 && !initialData && !isScanning) {
         setIsCategorizing(true);
         try {
           const result = await categorizeTransaction(description, type);
@@ -47,9 +48,43 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
           setIsCategorizing(false);
         }
       }
-    }, 1000);
+    }, 1500);
     return () => clearTimeout(timer);
-  }, [description, type, initialData]);
+  }, [description, type, initialData, isScanning]);
+
+  const handleScanClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    setAiStatus('IDLE');
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = (event.target?.result as string).split(',')[1];
+        const result = await analyzeReceipt(base64, file.type);
+        
+        setAmount(result.amount.toString());
+        setDescription(result.description);
+        setDate(result.date);
+        setCategory(result.category);
+        setIcon(result.icon);
+        setAiStatus('SUCCESS');
+        setIsScanning(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Scan error:", error);
+      alert("No pudimos leer el ticket. Intenta una foto más clara.");
+      setIsScanning(false);
+      setAiStatus('ERROR');
+    }
+  };
 
   const applyTemplate = (t: TransactionTemplate) => {
     setAmount(t.amount.toString());
@@ -90,17 +125,46 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
           </button>
         </div>
         
-        {!initialData && templates.length > 0 && (
-          <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange} 
+          accept="image/*" 
+          capture="environment" 
+          className="hidden" 
+        />
+
+        {!initialData && (
+          <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-hide items-center">
+            <button 
+              type="button" 
+              onClick={handleScanClick}
+              disabled={isScanning}
+              className="shrink-0 flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 active:scale-90 transition-all disabled:opacity-50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {isScanning ? 'Escaneando...' : 'Escanear Ticket'}
+            </button>
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 shrink-0"></div>
             {templates.map(t => (
-              <button key={t.id} type="button" onClick={() => applyTemplate(t)} className="shrink-0 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black text-slate-500 uppercase border border-transparent hover:border-indigo-500 transition-all">
+              <button key={t.id} type="button" onClick={() => applyTemplate(t)} className="shrink-0 px-4 py-3 bg-slate-100 dark:bg-slate-800 rounded-2xl text-[10px] font-black text-slate-500 uppercase border border-transparent hover:border-indigo-500 transition-all">
                 {t.name}
               </button>
             ))}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 relative">
+          {isScanning && (
+            <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-[3rem]">
+              <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+              <p className="text-sm font-black text-indigo-600 uppercase tracking-widest animate-pulse">La IA está leyendo tu ticket...</p>
+            </div>
+          )}
+
           <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-3xl">
             <button type="button" onClick={() => setType(TransactionType.EXPENSE)} className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${type === TransactionType.EXPENSE ? 'bg-white dark:bg-slate-700 shadow-lg text-rose-500' : 'text-slate-500'}`}>Gasto</button>
             <button type="button" onClick={() => setType(TransactionType.INCOME)} className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${type === TransactionType.INCOME ? 'bg-white dark:bg-slate-700 shadow-lg text-emerald-500' : 'text-slate-500'}`}>Ingreso</button>
@@ -147,7 +211,6 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
               )}
             </div>
 
-            {/* SECCIÓN DE CATEGORÍA MANUAL / INTELIGENTE */}
             <div className={`p-6 rounded-[2.5rem] transition-all border ${aiStatus === 'ERROR' ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
               <div className="flex justify-between items-center mb-4">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Categorización</p>
@@ -165,7 +228,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
                     onChange={(e) => {
                       setCategory(e.target.value);
                       setIcon(ICON_MAP[e.target.value] || "other");
-                      setAiStatus('IDLE'); // Marcamos como manual si el usuario cambia
+                      setAiStatus('IDLE');
                     }} 
                     className="w-full bg-white dark:bg-slate-900 p-3 rounded-xl text-xs font-black text-slate-700 dark:text-slate-200 outline-none shadow-sm"
                   >
@@ -185,7 +248,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ accounts, temp
 
           <button
             type="submit"
-            disabled={isCategorizing}
+            disabled={isCategorizing || isScanning}
             className="w-full py-5 bg-indigo-600 text-white font-black text-sm uppercase tracking-widest rounded-[2rem] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-3"
           >
             {initialData ? 'Actualizar Registro' : 'Confirmar Movimiento'}
