@@ -24,11 +24,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </h1>
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isAIActive ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/20 text-amber-200 animate-pulse'}`}>
               <div className={`w-1.5 h-1.5 rounded-full ${isAIActive ? 'bg-emerald-400' : 'bg-amber-400'}`}></div>
-              {isAIActive ? 'IA Activa' : 'IA Offline'}
+              {isAIActive ? 'IA Optimizada' : 'IA Offline'}
             </div>
           </div>
           <p className="text-indigo-100 dark:text-slate-400 text-xs font-bold mt-2 uppercase tracking-[0.3em] opacity-80">
-            Inteligencia Financiera
+            Gestión Inteligente
           </p>
         </div>
       </header>
@@ -36,7 +36,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         {!isAIActive && (
           <div className="mx-2 mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl">
             <p className="text-[10px] text-amber-800 dark:text-amber-400 font-bold leading-tight">
-              ⚠️ <span className="uppercase tracking-tighter">API_KEY no detectada:</span> La categorización automática está en modo básico. Configúrala en el panel de Netlify/Vercel.
+              ⚠️ <span className="uppercase tracking-tighter">API_KEY no detectada:</span> Trabajando en modo local. La inteligencia predictiva está limitada.
             </p>
           </div>
         )}

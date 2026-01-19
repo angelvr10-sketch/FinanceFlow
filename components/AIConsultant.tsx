@@ -10,20 +10,23 @@ interface AIConsultantProps {
 export const AIConsultant: React.FC<AIConsultantProps> = ({ transactions }) => {
   const [advice, setAdvice] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [status, setStatus] = useState<'IDLE' | 'OK' | 'SATURATED' | 'ERROR'>('IDLE');
 
   const fetchAdvice = async () => {
+    if (transactions.length < 5) return;
     setLoading(true);
-    setError(false);
+    setStatus('IDLE');
     try {
       const result = await getFinancialAdvice(transactions);
-      if (result.includes("Error") || result.includes("⚠️")) {
-        setError(true);
+      if (result.includes("saturado") || result.includes("⚠️")) {
+        setStatus(result.includes("saturado") ? 'SATURATED' : 'ERROR');
+      } else {
+        setStatus('OK');
       }
       setAdvice(result);
     } catch (e) {
-      setError(true);
-      setAdvice("Error inesperado de conexión con el servidor IA.");
+      setStatus('ERROR');
+      setAdvice("Error inesperado al conectar con el servidor de inteligencia.");
     } finally {
       setLoading(false);
     }
@@ -37,7 +40,9 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({ transactions }) => {
   }, [transactions.length]);
 
   return (
-    <div className="bg-indigo-600 dark:bg-indigo-900/40 text-white rounded-[4rem] p-10 relative overflow-hidden transition-all shadow-2xl mx-2">
+    <div className={`rounded-[4rem] p-10 relative overflow-hidden transition-all shadow-2xl mx-2 ${
+      status === 'SATURATED' ? 'bg-amber-600 dark:bg-amber-900/40' : 'bg-indigo-600 dark:bg-indigo-900/40'
+    } text-white`}>
       <div className="absolute top-0 right-0 p-10 opacity-10">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-40 w-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -50,36 +55,40 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({ transactions }) => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h4 className="text-xl font-black uppercase tracking-[0.3em]">Asistente IA</h4>
+        <h4 className="text-xl font-black uppercase tracking-[0.3em]">
+          {status === 'SATURATED' ? 'IA Saturada' : 'Asistente IA'}
+        </h4>
       </div>
 
       {loading ? (
         <div className="flex items-center gap-6 py-4">
           <div className="animate-spin rounded-full h-8 w-8 border-4 border-white/20 border-t-white"></div>
-          <p className="text-lg font-black italic animate-pulse">Analizando tus finanzas...</p>
+          <p className="text-lg font-black italic animate-pulse">Intentando conectar...</p>
         </div>
       ) : (
         <div className="space-y-6">
           {advice ? (
             <div className="prose prose-invert max-w-none">
-              <div className={`text-lg font-bold leading-relaxed ${error ? 'text-amber-200 opacity-80' : 'text-white'}`} 
+              <div className={`text-lg font-bold leading-relaxed ${status === 'SATURATED' || status === 'ERROR' ? 'text-amber-100' : 'text-white'}`} 
                    dangerouslySetInnerHTML={{ __html: advice.replace(/\n/g, '<br/>') }}>
               </div>
             </div>
           ) : (
-            <p className="text-lg font-bold opacity-60 italic">Necesito al menos 5 transacciones para generar un reporte inteligente.</p>
+            <p className="text-lg font-bold opacity-60 italic">Necesito al menos 5 transacciones para analizar tu flujo de dinero.</p>
           )}
           
           <div className="pt-4 flex flex-col sm:flex-row gap-4">
             <button 
               onClick={fetchAdvice}
-              className={`px-10 py-5 font-black uppercase tracking-widest rounded-2xl shadow-xl transition-all active:scale-95 text-sm ${error ? 'bg-amber-500 text-white' : 'bg-white text-indigo-700 hover:bg-slate-50'}`}
+              className={`px-10 py-5 font-black uppercase tracking-widest rounded-2xl shadow-xl transition-all active:scale-95 text-sm ${
+                status === 'SATURATED' ? 'bg-white text-amber-700' : 'bg-white text-indigo-700 hover:bg-slate-50'
+              }`}
             >
-              {error ? 'Reintentar Conexión' : 'Actualizar Análisis'}
+              {status === 'SATURATED' ? 'Reintentar Ahora' : 'Actualizar Análisis'}
             </button>
-            {error && (
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/50 flex items-center italic">
-                La API de Google puede estar saturada
+            {status === 'SATURATED' && (
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/50 flex items-center italic max-w-[150px] leading-tight">
+                Google está recibiendo muchas peticiones. Por favor, espera un poco.
               </p>
             )}
           </div>
