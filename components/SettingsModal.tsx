@@ -19,6 +19,8 @@ interface SettingsModalProps {
   onDeleteAccount: (id: string) => void;
   onAddTemplate: (t: TransactionTemplate) => void;
   onDeleteTemplate: (id: string) => void;
+  onSignOut: () => void;
+  userEmail?: string;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
@@ -33,7 +35,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateAccount,
   onDeleteAccount,
   onAddTemplate,
-  onDeleteTemplate
+  onDeleteTemplate,
+  onSignOut,
+  userEmail
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showAccountManager, setShowAccountManager] = useState(false);
@@ -57,12 +61,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="flex justify-between items-center mb-10">
             <div>
               <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Ajustes</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <div className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {isCloudConnected ? 'Nube Conectada' : 'Modo Offline'}
-                </span>
-              </div>
+              {userEmail && (
+                <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-1 truncate max-w-[150px]">{userEmail}</p>
+              )}
             </div>
             <button onClick={onClose} className="p-3 text-slate-400 hover:text-slate-600 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -92,37 +93,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => setShowAccountManager(true)}
                 className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                 Gestionar Cuentas
               </button>
 
               <button
                 type="button"
                 onClick={() => setShowTemplateManager(true)}
-                className="flex items-center justify-center gap-4 w-full py-5 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all border border-emerald-100 dark:border-emerald-500/20"
+                className="flex items-center justify-center gap-4 w-full py-5 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
                 Gestionar Plantillas
               </button>
 
-              <button
-                type="button"
-                onClick={onExport}
-                className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl active:scale-95 transition-all"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Exportar Backup
-              </button>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={onExport}
+                  className="flex items-center justify-center gap-2 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
+                >
+                  Exportar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center justify-center gap-2 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
+                >
+                  Importar
+                </button>
+              </div>
+
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
 
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-4 w-full py-5 bg-white dark:bg-transparent border-2 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
+                onClick={onSignOut}
+                className="flex items-center justify-center gap-4 w-full py-5 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all border border-rose-100 dark:border-rose-900/50"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                Restaurar JSON
+                Cerrar Sesión
               </button>
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
             </div>
           </div>
         </div>

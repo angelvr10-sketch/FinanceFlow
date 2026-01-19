@@ -7,6 +7,7 @@ import { TransactionForm } from './components/TransactionForm';
 import { AIConsultant } from './components/AIConsultant';
 import { SettingsModal } from './components/SettingsModal';
 import { DetailedReport } from './components/DetailedReport';
+import { Auth } from './components/Auth';
 import { Transaction, Account, TransactionType, TransactionTemplate } from './types';
 import { supabase } from './services/supabase';
 
@@ -19,6 +20,7 @@ const INITIAL_ACCOUNTS: Account[] = [
 type View = 'dashboard' | 'reports';
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
   const [templates, setTemplates] = useState<TransactionTemplate[]>([]);
@@ -31,6 +33,21 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Escuchar cambios de sesión
+  useEffect(() => {
+    if (!supabase) return;
+    
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const sortAccounts = (accs: Account[]) => {
     return [...accs].sort((a, b) => {
       if (a.type === 'EFECTIVO') return -1;
@@ -41,6 +58,7 @@ const App: React.FC = () => {
 
   const mapToDB = (t: any) => ({
     id: t.id,
+    user_id: session?.user?.id,
     account_id: t.accountId,
     amount: t.amount,
     description: t.description,
@@ -64,18 +82,18 @@ const App: React.FC = () => {
   });
 
   const fetchCloudData = useCallback(async () => {
-    if (!supabase) return;
+    if (!supabase || !session) return;
     setIsSyncing(true);
     try {
-      const { data: accData } = await supabase.from('accounts').select('*');
+      const { data: accData } = await supabase.from('accounts').select('*').eq('user_id', session.user.id);
       if (accData && accData.length > 0) {
         setAccounts(sortAccounts(accData));
       }
 
-      const { data: txData } = await supabase.from('transactions').select('*');
+      const { data: txData } = await supabase.from('transactions').select('*').eq('user_id', session.user.id);
       if (txData) setTransactions(txData.map(mapFromDB));
 
-      const { data: templData } = await supabase.from('templates').select('*');
+      const { data: templData } = await supabase.from('templates').select('*').eq('user_id', session.user.id);
       if (templData) {
         setTemplates(templData.map(t => ({
           id: t.id,
@@ -93,7 +111,7 @@ const App: React.FC = () => {
     } finally {
       setIsSyncing(false);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
@@ -102,20 +120,25 @@ const App: React.FC = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
-    const savedTx = localStorage.getItem('ff_transactions');
-    const savedAcc = localStorage.getItem('ff_accounts');
-    const savedTempl = localStorage.getItem('ff_templates');
-    if (savedTx) setTransactions(JSON.parse(savedTx));
-    if (savedAcc) setAccounts(sortAccounts(JSON.parse(savedAcc)));
-    if (savedTempl) setTemplates(JSON.parse(savedTempl));
-    fetchCloudData();
-  }, [fetchCloudData]);
+    if (!session) {
+      const savedTx = localStorage.getItem('ff_transactions');
+      const savedAcc = localStorage.getItem('ff_accounts');
+      const savedTempl = localStorage.getItem('ff_templates');
+      if (savedTx) setTransactions(JSON.parse(savedTx));
+      if (savedAcc) setAccounts(sortAccounts(JSON.parse(savedAcc)));
+      if (savedTempl) setTemplates(JSON.parse(savedTempl));
+    } else {
+      fetchCloudData();
+    }
+  }, [session, fetchCloudData]);
 
   useEffect(() => {
-    localStorage.setItem('ff_transactions', JSON.stringify(transactions));
-    localStorage.setItem('ff_accounts', JSON.stringify(accounts));
-    localStorage.setItem('ff_templates', JSON.stringify(templates));
-  }, [transactions, accounts, templates]);
+    if (!session) {
+      localStorage.setItem('ff_transactions', JSON.stringify(transactions));
+      localStorage.setItem('ff_accounts', JSON.stringify(accounts));
+      localStorage.setItem('ff_templates', JSON.stringify(templates));
+    }
+  }, [transactions, accounts, templates, session]);
 
   const handleExport = () => {
     const data = { accounts, transactions, templates };
@@ -150,15 +173,18 @@ const App: React.FC = () => {
     if (editingTransaction) setTransactions(prev => prev.map(t => t.id === id ? newTx : t));
     else setTransactions(prev => [newTx, ...prev]);
 
-    if (supabase) await supabase.from('transactions').upsert(mapToDB(newTx));
+    if (supabase && session) {
+      await supabase.from('transactions').upsert(mapToDB(newTx));
+    }
     setIsFormOpen(false);
   };
 
   const handleAddTemplate = async (templ: TransactionTemplate) => {
     setTemplates(prev => [...prev, templ]);
-    if (supabase) {
+    if (supabase && session) {
       await supabase.from('templates').upsert({
         id: templ.id,
+        user_id: session.user.id,
         name: templ.name,
         account_id: templ.accountId,
         amount: templ.amount,
@@ -172,13 +198,13 @@ const App: React.FC = () => {
 
   const handleDeleteTemplate = async (id: string) => {
     setTemplates(prev => prev.filter(t => t.id !== id));
-    if (supabase) await supabase.from('templates').delete().eq('id', id);
+    if (supabase && session) await supabase.from('templates').delete().eq('id', id);
   };
 
   const handleDeleteTransaction = async (id: string) => {
     if (!confirm('¿Eliminar?')) return;
     setTransactions(prev => prev.filter(t => t.id !== id));
-    if (supabase) await supabase.from('transactions').delete().eq('id', id);
+    if (supabase && session) await supabase.from('transactions').delete().eq('id', id);
   };
 
   const startEdit = (t: Transaction) => {
@@ -189,17 +215,31 @@ const App: React.FC = () => {
   const handleAddAccount = async (acc: Account) => {
     const newAccounts = sortAccounts([...accounts, acc]);
     setAccounts(newAccounts);
-    if (supabase) await supabase.from('accounts').upsert(acc);
+    if (supabase && session) await supabase.from('accounts').upsert({ ...acc, user_id: session.user.id });
   };
   const handleUpdateAccount = async (acc: Account) => {
     const newAccounts = sortAccounts(accounts.map(a => a.id === acc.id ? acc : a));
     setAccounts(newAccounts);
-    if (supabase) await supabase.from('accounts').update(acc).eq('id', acc.id);
+    if (supabase && session) await supabase.from('accounts').update(acc).eq('id', acc.id);
   };
   const handleDeleteAccount = async (id: string) => {
     setAccounts(prev => prev.filter(a => a.id !== id));
-    if (supabase) await supabase.from('accounts').delete().eq('id', id);
+    if (supabase && session) await supabase.from('accounts').delete().eq('id', id);
   };
+
+  const handleSignOut = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+      setTransactions([]);
+      setAccounts(INITIAL_ACCOUNTS);
+      setTemplates([]);
+      setIsSettingsOpen(false);
+    }
+  };
+
+  if (!session) {
+    return <Auth onSuccess={fetchCloudData} />;
+  }
 
   return (
     <Layout>
@@ -290,6 +330,8 @@ const App: React.FC = () => {
           onDeleteAccount={handleDeleteAccount}
           onAddTemplate={handleAddTemplate}
           onDeleteTemplate={handleDeleteTemplate}
+          onSignOut={handleSignOut}
+          userEmail={session?.user?.email}
         />
       )}
     </Layout>
