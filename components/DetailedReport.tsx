@@ -38,25 +38,35 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, ac
   }, [transactions, periodType, selectedMonth, selectedYear, selectedAccountId]);
 
   const stats = useMemo(() => {
-    const report: Record<string, { total: number, count: number, type: TransactionType }> = {};
-    let totalExpenses = 0;
-    let totalIncomes = 0;
+    const incomeTx = filteredData.filter(t => t.type === TransactionType.INCOME);
+    const expenseTx = filteredData.filter(t => t.type === TransactionType.EXPENSE);
 
-    filteredData.forEach(t => {
-      if (!report[t.category]) {
-        report[t.category] = { total: 0, count: 0, type: t.type };
-      }
-      report[t.category].total += t.amount;
-      report[t.category].count += 1;
-      
-      if (t.type === TransactionType.EXPENSE) totalExpenses += t.amount;
-      else totalIncomes += t.amount;
-    });
+    const totalIncomes = incomeTx.reduce((sum, t) => sum + t.amount, 0);
+    const totalExpenses = expenseTx.reduce((sum, t) => sum + t.amount, 0);
 
-    return { 
-      categories: Object.entries(report).sort((a, b) => b[1].total - a[1].total),
+    const buildHierarchy = (txs: Transaction[]) => {
+      const hierarchy: Record<string, { total: number, subcategories: Record<string, number> }> = {};
+      txs.forEach(t => {
+        if (!hierarchy[t.category]) {
+          hierarchy[t.category] = { total: 0, subcategories: {} };
+        }
+        hierarchy[t.category].total += t.amount;
+        const sub = t.subCategory || "General";
+        hierarchy[t.category].subcategories[sub] = (hierarchy[t.category].subcategories[sub] || 0) + t.amount;
+      });
+      return Object.entries(hierarchy).sort((a, b) => b[1].total - a[1].total);
+    };
+
+    return {
+      incomeCount: incomeTx.length,
+      expenseCount: expenseTx.length,
+      totalIncomes,
       totalExpenses,
-      totalIncomes
+      avgIncome: incomeTx.length > 0 ? totalIncomes / incomeTx.length : 0,
+      avgExpense: expenseTx.length > 0 ? totalExpenses / expenseTx.length : 0,
+      cashFlow: totalIncomes - totalExpenses,
+      incomeHierarchy: buildHierarchy(incomeTx),
+      expenseHierarchy: buildHierarchy(expenseTx)
     };
   }, [filteredData]);
 
@@ -66,7 +76,7 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, ac
       return;
     }
 
-    const headers = ["Fecha", "Cuenta", "Descripcion", "Categoria", "Tipo", "Monto"];
+    const headers = ["Fecha", "Cuenta", "Descripcion", "Categoria", "Subcategoria", "Tipo", "Monto"];
     const rows = filteredData.map(t => {
       const accountName = accounts.find(a => a.id === t.accountId)?.name || 'Cuenta Desconocida';
       return [
@@ -74,6 +84,7 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, ac
         `"${accountName}"`,
         `"${t.description.replace(/"/g, '""')}"`,
         `"${t.category}"`,
+        `"${t.subCategory || 'General'}"`,
         t.type,
         t.amount
       ];
@@ -101,7 +112,7 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, ac
   };
 
   return (
-    <div className="space-y-10 animate-in slide-in-from-right duration-500 pb-20">
+    <div className="space-y-10 animate-in slide-in-from-right duration-500 pb-32">
       {/* Selector de Periodo y Filtros */}
       <div className="bg-white dark:bg-slate-900 p-8 rounded-[3.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-6">
         <div className="flex bg-slate-100 dark:bg-slate-800 p-2 rounded-2xl">
@@ -159,21 +170,107 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, ac
         </button>
       </div>
 
-      {/* Resumen de Cifras */}
-      <div className="grid grid-cols-2 gap-6">
-        <div className="bg-emerald-50 dark:bg-emerald-500/10 p-8 rounded-[3rem] border border-emerald-100 dark:border-emerald-500/20">
-          <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Total Ingresos</p>
-          <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300 tracking-tighter">${stats.totalIncomes.toLocaleString()}</p>
+      {/* TABLA DE FLUJO DE CAJA */}
+      <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+           <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest text-center">Resumen de Flujo de Caja</h3>
         </div>
-        <div className="bg-rose-50 dark:bg-rose-500/10 p-8 rounded-[3rem] border border-rose-100 dark:border-rose-500/20">
-          <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Total Gastos</p>
-          <p className="text-3xl font-black text-rose-700 dark:text-rose-300 tracking-tighter">${stats.totalExpenses.toLocaleString()}</p>
+        <table className="w-full text-left">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tr className="bg-white dark:bg-slate-900">
+              <td className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-tighter">Métrica</td>
+              <td className="p-5 text-[10px] font-black uppercase text-emerald-500 text-center tracking-tighter">Ingresos</td>
+              <td className="p-5 text-[10px] font-black uppercase text-rose-500 text-right tracking-tighter">Gastos</td>
+            </tr>
+            <tr>
+              <td className="p-5 text-xs font-bold text-slate-500">Operaciones</td>
+              <td className="p-5 text-sm font-black text-slate-900 dark:text-white text-center">{stats.incomeCount}</td>
+              <td className="p-5 text-sm font-black text-slate-900 dark:text-white text-right">{stats.expenseCount}</td>
+            </tr>
+            <tr>
+              <td className="p-5 text-xs font-bold text-slate-500">Promedio / Ticket</td>
+              <td className="p-5 text-sm font-black text-emerald-600 dark:text-emerald-400 text-center">${stats.avgIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+              <td className="p-5 text-sm font-black text-rose-600 dark:text-rose-400 text-right">${stats.avgExpense.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+            </tr>
+            <tr>
+              <td className="p-5 text-xs font-bold text-slate-500">Totales</td>
+              <td className="p-5 text-base font-black text-emerald-600 dark:text-emerald-400 text-center">${stats.totalIncomes.toLocaleString()}</td>
+              <td className="p-5 text-base font-black text-rose-600 dark:text-rose-400 text-right">${stats.totalExpenses.toLocaleString()}</td>
+            </tr>
+            <tr className={stats.cashFlow >= 0 ? 'bg-emerald-50/50 dark:bg-emerald-950/20' : 'bg-rose-50/50 dark:bg-rose-950/20'}>
+              <td className="p-6 text-xs font-black uppercase text-slate-600 dark:text-slate-400">Flujo de Caja Neto</td>
+              <td colSpan={2} className={`p-6 text-2xl font-black text-right tracking-tighter ${stats.cashFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {stats.cashFlow >= 0 ? '+' : '-'}${Math.abs(stats.cashFlow).toLocaleString()}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* DESGLOSE POR CATEGORÍAS Y SUBCATEGORÍAS */}
+      <div className="space-y-8">
+        {/* SECCIÓN INGRESOS */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-black text-emerald-500 uppercase tracking-[0.4em] px-6">Detalle de Ingresos</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+            {stats.incomeHierarchy.length > 0 ? (
+              <div className="divide-y divide-slate-50 dark:divide-slate-800">
+                {stats.incomeHierarchy.map(([cat, data]) => (
+                  <div key={cat} className="p-6 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{cat}</p>
+                      <p className="text-base font-black text-emerald-600 dark:text-emerald-400">${data.total.toLocaleString()}</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 pl-4 border-l-2 border-emerald-100 dark:border-emerald-900/30">
+                      {Object.entries(data.subcategories).map(([sub, amount]) => (
+                        <div key={sub} className="flex justify-between items-center">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">{sub}</p>
+                          <p className="text-[10px] font-black text-slate-500">${amount.toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-10 text-center italic text-slate-400 font-black uppercase text-[10px]">Sin ingresos en este periodo</div>
+            )}
+          </div>
+        </div>
+
+        {/* SECCIÓN GASTOS */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-black text-rose-500 uppercase tracking-[0.4em] px-6">Detalle de Gastos</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+            {stats.expenseHierarchy.length > 0 ? (
+              <div className="divide-y divide-slate-50 dark:divide-slate-800">
+                {stats.expenseHierarchy.map(([cat, data]) => (
+                  <div key={cat} className="p-6 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{cat}</p>
+                      <p className="text-base font-black text-rose-600 dark:text-rose-400">${data.total.toLocaleString()}</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 pl-4 border-l-2 border-rose-100 dark:border-rose-900/30">
+                      {Object.entries(data.subcategories).map(([sub, amount]) => (
+                        <div key={sub} className="flex justify-between items-center">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">{sub}</p>
+                          <p className="text-[10px] font-black text-slate-500">${amount.toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-10 text-center italic text-slate-400 font-black uppercase text-[10px]">Sin gastos en este periodo</div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Tabla Detallada de Todas las Transacciones */}
+      {/* Listado de Movimientos (Final) */}
       <div className="space-y-4">
-        <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] px-6">Listado de Movimientos</h3>
+        <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] px-6">Lista de Transacciones</h3>
         <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -192,7 +289,7 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, ac
                     </td>
                     <td className="p-5">
                       <p className="text-sm font-black text-slate-800 dark:text-white line-clamp-1 break-all" title={t.description}>{t.description}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">{t.category}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">{t.category} {t.subCategory && `• ${t.subCategory}`}</p>
                     </td>
                     <td className={`p-5 text-base font-black text-right tracking-tighter ${t.type === TransactionType.INCOME ? 'text-emerald-500' : 'text-rose-500'}`}>
                       {t.type === TransactionType.INCOME ? '+' : '-'}${t.amount.toLocaleString()}
@@ -202,7 +299,7 @@ export const DetailedReport: React.FC<DetailedReportProps> = ({ transactions, ac
               </tbody>
             </table>
             {filteredData.length === 0 && (
-              <div className="p-20 text-center italic text-slate-400 font-black uppercase tracking-widest">Sin datos en este periodo</div>
+              <div className="p-20 text-center italic text-slate-400 font-black uppercase tracking-widest text-xs">Sin movimientos registrados</div>
             )}
           </div>
         </div>
