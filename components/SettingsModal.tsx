@@ -93,6 +93,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => setShowAccountManager(true)}
                 className="flex items-center justify-center gap-4 w-full py-5 bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
                 Gestionar Cuentas
               </button>
 
@@ -101,6 +104,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => setShowTemplateManager(true)}
                 className="flex items-center justify-center gap-4 w-full py-5 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
                 Gestionar Plantillas
               </button>
 
@@ -110,6 +116,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClick={onExport}
                   className="flex items-center justify-center gap-2 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
                 >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
                   Exportar
                 </button>
                 <button
@@ -117,6 +126,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClick={() => fileInputRef.current?.click()}
                   className="flex items-center justify-center gap-2 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
                 >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
                   Importar
                 </button>
               </div>
@@ -128,6 +140,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={onSignOut}
                 className="flex items-center justify-center gap-4 w-full py-5 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400 font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all border border-rose-100 dark:border-rose-900/50"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
                 Cerrar Sesión
               </button>
             </div>
