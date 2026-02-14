@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationResult, TransactionType } from "../types";
 
-const DEEP_ANALYSIS_MODEL = 'gemini-3-pro-preview';
-const FAST_TASK_MODEL = 'gemini-3-flash-preview';
+// Usamos Flash para ambas tareas por su velocidad y alta disponibilidad
+const ANALYST_MODEL = 'gemini-3-flash-preview';
 
 const getApiKey = () => {
   try {
@@ -100,7 +100,6 @@ export const categorizeTransaction = async (description: string, type: Transacti
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const desc = description.toLowerCase();
 
-  // 1. INTENTO LOCAL (INSTANTÁNEO)
   for (const rule of LOCAL_RULES) {
     if (rule.keys.some(k => desc.includes(k))) {
       const matched = findBestCategoryMatch(rule.cat, categories);
@@ -115,14 +114,13 @@ export const categorizeTransaction = async (description: string, type: Transacti
     }
   }
 
-  // 2. FALLBACK IA (SOLO SI HAY API KEY Y NO HUBO MATCH LOCAL)
   const apiKey = getApiKey();
   if (!apiKey) return localFallback(description, isIncome);
 
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: FAST_TASK_MODEL,
+      model: ANALYST_MODEL,
       contents: `Clasifica: "${description}"`,
       config: {
         systemInstruction: `Responde exclusivamente con un objeto JSON. La categoría DEBE ser una de: [${categories.join(", ")}].`,
@@ -167,34 +165,70 @@ function localFallback(description: string, isIncome: boolean): CategorizationRe
   };
 }
 
-// Otros servicios se mantienen igual...
 async function runAiRequest(modelName: string, prompt: string, systemInstruction: string, config: any = {}): Promise<string> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API_KEY_MISSING");
   const ai = new GoogleGenAI({ apiKey });
-  const contents: any = config.imageData ? { parts: [{ inlineData: config.imageData }, { text: prompt }] } : prompt;
+  
+  const contents = config.imageData 
+    ? { parts: [{ inlineData: config.imageData }, { text: prompt }] } 
+    : prompt;
+
   const response = await ai.models.generateContent({
     model: modelName,
     contents: contents,
     config: {
       systemInstruction,
-      temperature: config.useThinking ? 0.7 : 0.1,
-      ...(config.useThinking && modelName.includes('pro') && { thinkingConfig: { thinkingBudget: 12000 } }),
+      temperature: config.useThinking ? 0.5 : 0.1,
+      // Flash también soporta Thinking pero requiere un presupuesto menor para ser ágil
+      ...(config.useThinking && { thinkingConfig: { thinkingBudget: 4000 } }),
       ...(config.isJson && { responseMimeType: "application/json", responseSchema: config.schema })
     }
   });
-  return response.text || "";
+
+  if (!response.text) throw new Error("EMPTY_AI_RESPONSE");
+  return response.text;
 }
 
 export const analyzeReceipt = async (base64Data: string, mimeType: string): Promise<any> => {
-  const responseText = await runAiRequest(FAST_TASK_MODEL, "Extrae la info.", `JSON con amount, merchant, date, category (${EXPENSE_CATEGORIES.join(", ")}).`, { isJson: true, schema: { type: Type.OBJECT, properties: { amount: { type: Type.NUMBER }, merchant: { type: Type.STRING }, date: { type: Type.STRING }, category: { type: Type.STRING } }, required: ["amount", "merchant", "category"] }, imageData: { data: base64Data, mimeType } });
+  const responseText = await runAiRequest(ANALYST_MODEL, "Extrae la info.", `Analiza este ticket. Responde en JSON con amount (numero), merchant (nombre tienda), date (YYYY-MM-DD), category (elige la mejor de [${EXPENSE_CATEGORIES.join(", ")}]).`, { 
+    isJson: true, 
+    schema: { 
+      type: Type.OBJECT, 
+      properties: { 
+        amount: { type: Type.NUMBER }, 
+        merchant: { type: Type.STRING }, 
+        date: { type: Type.STRING }, 
+        category: { type: Type.STRING } 
+      }, 
+      required: ["amount", "merchant", "category"] 
+    }, 
+    imageData: { data: base64Data, mimeType } 
+  });
+  
   const result = JSON.parse(responseText);
   const matchedCategory = findBestCategoryMatch(result.category, EXPENSE_CATEGORIES) || "Otros Gastos";
-  return { amount: result.amount || 0, description: result.merchant || "Compra", date: result.date || new Date().toISOString().split('T')[0], category: matchedCategory, icon: ICON_MAP[matchedCategory] || "shopping" };
+  return { 
+    amount: result.amount || 0, 
+    description: result.merchant || "Compra", 
+    date: result.date || new Date().toISOString().split('T')[0], 
+    category: matchedCategory, 
+    icon: ICON_MAP[matchedCategory] || "shopping" 
+  };
 };
 
 export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
-  if (transactions.length < 5) return "Necesito más datos.";
-  const dataSummary = transactions.slice(0, 40).map(t => `${t.date} | ${t.type}: $${t.amount} | ${t.category}`).join('\n');
-  return await runAiRequest(DEEP_ANALYSIS_MODEL, `Analiza:\n${dataSummary}`, "Consultor financiero. Da consejos de ahorro en español.", { useThinking: true });
+  if (transactions.length < 5) return "Necesito más datos para darte un análisis certero.";
+  
+  const dataSummary = transactions
+    .slice(0, 50)
+    .map(t => `${t.date.split('T')[0]} | ${t.type === TransactionType.INCOME ? 'INGRESO' : 'GASTO'}: $${t.amount} | ${t.category} (${t.description})`)
+    .join('\n');
+
+  return await runAiRequest(
+    ANALYST_MODEL, 
+    `Aquí tienes mis últimos movimientos:\n${dataSummary}\n\nPor favor, analiza mis hábitos y dame 3 consejos concretos para ahorrar o mejorar mi salud financiera este mes.`, 
+    "Eres un experto consultor financiero personal. Hablas de forma clara, motivadora y analítica. Tus consejos deben basarse estrictamente en los datos proporcionados.", 
+    { useThinking: true }
+  );
 };
